@@ -9,6 +9,12 @@ use self::uart_16550::SerialPort;
 pub static COM1: Mutex<SerialPort> = Mutex::new(SerialPort::new(0x3F8));
 pub static COM2: Mutex<SerialPort> = Mutex::new(SerialPort::new(0x2F8));
 
+/* *
+ * init
+ * @brief:  initialize serial port 1 and 2
+ * @param:  none
+ * @retval: none
+ * */
 pub fn init() {
     assert_has_not_been_called!("serial::init must be called only once");
 
@@ -23,7 +29,15 @@ pub trait SerialRead {
     fn receive(&mut self) -> u8;
 }
 
+
 impl SerialRead for SerialPort {
+    /* *
+     * receive
+     * @brief:  get a char from serial port
+     * @param: 
+        self:   self
+     * @retval: the char got from serial port
+     * */
     fn receive(&mut self) -> u8 {
         unsafe {
             let ports = self as *mut _ as *mut [Pio<u8>; 6];

@@ -3,6 +3,12 @@ use memory::{active_table, FRAME_ALLOCATOR, init_heap, MemoryArea, MemoryAttr, M
 use super::riscv::{addr::*, register::sstatus};
 use ucore_memory::PAGE_SIZE;
 
+/* *
+ * init - initialize the memory
+ * @brief:  initialize the physical memory management(PageData struct, page table, frame allocator) and heap
+ * @param:  none
+ * @retval: none
+ * */
 pub fn init() {
     #[repr(align(4096))]
     struct PageData([u8; PAGE_SIZE]);
@@ -16,6 +22,12 @@ pub fn init() {
     init_heap();
 }
 
+/* *
+ * init_frame_allocator
+ * @brief:  set memory which is not in heap available in BitAlloc
+ * @param:  none
+ * @retval: none
+ * */
 fn init_frame_allocator() {
     use bit_allocator::BitAlloc;
     use core::ops::Range;
@@ -26,6 +38,14 @@ fn init_frame_allocator() {
     ba.insert(to_range(KERNEL_HEAP_OFFSET + KERNEL_HEAP_SIZE, MEMORY_END));
     info!("FrameAllocator init end");
 
+    /* *
+    * init_frame_allocator
+    * @brief:  use the memory address to get the page number
+    * @param:  
+        start:  start address
+        end:    end address
+    * @retval: the page number range from start address to end address
+    * */
     fn to_range(start: usize, end: usize) -> Range<usize> {
         let page_start = (start - MEMORY_OFFSET) / PAGE_SIZE;
         let page_end = (end - MEMORY_OFFSET - 1) / PAGE_SIZE + 1;
@@ -33,6 +53,12 @@ fn init_frame_allocator() {
     }
 }
 
+/* *
+ * remap_the_kernel
+ * @brief:  initialize kernel stack and remap the kernel
+ * @param:  none
+ * @retval: none
+ * */
 fn remap_the_kernel() {
     use consts::{KERNEL_HEAP_OFFSET, KERNEL_HEAP_SIZE};
     let kstack = Stack {

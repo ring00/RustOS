@@ -5,6 +5,13 @@ use super::bbl::sbi;
 struct SerialPort;
 
 impl Write for SerialPort {
+    /* *
+     * write_str
+     * @brief:  write a string into serial port
+     * @param: 
+        s:  the string to write
+     * @retval: succeed or not (core::fmt::Result)
+     * */
     fn write_str(&mut self, s: &str) -> Result {
         for c in s.bytes() {
             if c == 127 {
@@ -19,6 +26,13 @@ impl Write for SerialPort {
     }
 }
 
+/* *
+ * putchar
+ * @brief:  write a char into console
+ * @param: 
+    c:  the char to write(u8)
+ * @retval: none
+ * */
 fn putchar(c: u8) {
     #[cfg(feature = "no_bbl")]
     unsafe {
@@ -29,6 +43,12 @@ fn putchar(c: u8) {
     sbi::console_putchar(c as usize);
 }
 
+/* *
+ * getchar
+ * @brief:  get a char from console
+ * @param:  none
+ * @retval: the char got from console
+ * */
 pub fn getchar() -> char {
     #[cfg(feature = "no_bbl")]
     let c = unsafe {
@@ -44,6 +64,13 @@ pub fn getchar() -> char {
     }
 }
 
+/* *
+ * putfmt
+ * @brief:  output fmt into serial port
+ * @param:
+    fmt:    output arguments(core::fmt::Arguments), including string to output
+ * @retval: none
+ * */
 pub fn putfmt(fmt: Arguments) {
     SerialPort.write_fmt(fmt).unwrap();
 }

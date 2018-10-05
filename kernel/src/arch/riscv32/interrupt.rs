@@ -4,6 +4,12 @@ pub use self::context::*;
 #[path = "context.rs"]
 mod context;
 
+/* *
+ * init
+ * @brief:  initialize the trap to enable the interrupt
+ * @param:  none
+ * @retval: none
+ * */
 pub fn init() {
     extern {
         fn __alltraps();
@@ -18,11 +24,23 @@ pub fn init() {
     info!("interrupt: init end");
 }
 
+/* *
+ * enable
+ * @brief:  enable the interrupt
+ * @param:  none
+ * @retval: none
+ * */
 #[inline(always)]
 pub unsafe fn enable() {
     sstatus::set_sie();
 }
 
+/* *
+ * disable_and_store
+ * @brief:  disable the interrupt and store the status
+ * @param:  none
+ * @retval: status(usize)
+ * */
 #[inline(always)]
 pub unsafe fn disable_and_store() -> usize {
     let e = sstatus::read().sie() as usize;
@@ -30,6 +48,13 @@ pub unsafe fn disable_and_store() -> usize {
     e
 }
 
+/* *
+ * restore
+ * @brief:  use the original status to restore the process
+ * @param:
+    flags:  original status(usize)
+ * @retval: none
+ * */
 #[inline(always)]
 pub unsafe fn restore(flags: usize) {
     if flags != 0 {
@@ -37,6 +62,13 @@ pub unsafe fn restore(flags: usize) {
     }
 }
 
+/* *
+ * rust_trap
+ * @brief:  deal with different types of interrupt using the TrapFrame
+ * @param:
+    tf:     TrapFrame
+ * @retval: none
+ * */
 #[no_mangle]
 pub extern fn rust_trap(tf: &mut TrapFrame) {
     use super::riscv::register::scause::{Trap, Interrupt as I, Exception as E};
@@ -51,17 +83,37 @@ pub extern fn rust_trap(tf: &mut TrapFrame) {
     trace!("Interrupt end");
 }
 
+/* *
+ * timer
+ * @brief:  call the timer to switch process
+ * @param:  none
+ * @retval: none
+ * */
 fn timer() {
     ::trap::timer();
     super::timer::set_next();
 }
 
+/* *
+ * syscall
+ * @brief:  call the syscall
+ * @param:
+    tf:     TrapFrame
+ * @retval: none
+ * */
 fn syscall(tf: &mut TrapFrame) {
     tf.sepc += 4;   // Must before syscall, because of fork.
     let ret = ::syscall::syscall(tf.x[10], [tf.x[11], tf.x[12], tf.x[13], tf.x[14], tf.x[15], tf.x[16]], tf);
     tf.x[10] = ret as usize;
 }
 
+/* *
+ * illegal_inst
+ * @brief:  system error, call trap::error to deal with the errir
+ * @param:
+    tf:     TrapFrame
+ * @retval: none
+ * */
 fn illegal_inst(tf: &mut TrapFrame) {
     if !emulate_mul_div(tf) {
         ::trap::error(tf);

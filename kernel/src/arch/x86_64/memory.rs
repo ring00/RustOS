@@ -6,6 +6,13 @@ use super::{BootInfo, MemoryRegionType};
 use ucore_memory::PAGE_SIZE;
 use ucore_memory::paging::PageTable;
 
+/* *
+ * init - initialize the memory
+ * @brief:  initialize the physical memory management(PageData struct, page table, frame allocator) and heap
+ * @param:  
+    boot_info:  {BootInfo, MemoryRegionType}, from bootloader
+ * @retval: none
+ * */
 pub fn init(boot_info: &BootInfo) {
     assert_has_not_been_called!("memory::init must be called only once");
     init_frame_allocator(boot_info);
@@ -13,7 +20,13 @@ pub fn init(boot_info: &BootInfo) {
     info!("memory: init end");
 }
 
-/// Init FrameAllocator and insert all 'Usable' regions from BootInfo.
+/* *
+ * init_frame_allocator
+ * @brief:  Init FrameAllocator and insert all 'Usable' regions from BootInfo.
+ * @param:  
+    boot_info:  {BootInfo, MemoryRegionType}, from bootloader
+ * @retval: none
+ * */
 fn init_frame_allocator(boot_info: &BootInfo) {
     let mut ba = FRAME_ALLOCATOR.lock();
     for region in boot_info.memory_map.iter() {
