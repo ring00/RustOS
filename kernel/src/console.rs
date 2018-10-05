@@ -1,7 +1,15 @@
+/**
+ * @file console.rs
+ * @brief Utility functions for console.
+ */
+
 use core::ops::Deref;
 use alloc::string::String;
 use arch::io::getchar;
 
+/**
+ * @brief Read one line.
+ */
 pub fn get_line() -> String {
     let mut s = String::new();
     loop {

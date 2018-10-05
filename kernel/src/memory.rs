@@ -1,3 +1,8 @@
+/**
+ * @file memory.rs
+ * @brief Platform independent memory management.
+ */
+
 pub use arch::paging::*;
 use bit_allocator::{BitAlloc, BitAlloc4K, BitAlloc64K};
 use consts::MEMORY_OFFSET;
@@ -21,18 +26,32 @@ lazy_static! {
     pub static ref FRAME_ALLOCATOR: Mutex<FrameAlloc> = Mutex::new(FrameAlloc::default());
 }
 
+/**
+ * @brief Alloc a frame.
+ *
+ * @retval Option<usize> The frame address.
+ */
 pub fn alloc_frame() -> Option<usize> {
     let ret = FRAME_ALLOCATOR.lock().alloc().map(|id| id * PAGE_SIZE + MEMORY_OFFSET);
     trace!("Allocate frame: {:x?}", ret);
     ret
 }
 
+/**
+ * @brief Dealloc a frame
+ *
+ * @param target The frame address.
+ */
 pub fn dealloc_frame(target: usize) {
     trace!("Deallocate frame: {:x}", target);
     FRAME_ALLOCATOR.lock().dealloc((target - MEMORY_OFFSET) / PAGE_SIZE);
 }
 
-// alloc from heap
+/**
+ * @brief Alloc stack from heap.
+ *
+ * @retval Stack
+ */
 pub fn alloc_stack() -> Stack {
     use alloc::alloc::{alloc, Layout};
     const STACK_SIZE: usize = 0x8000;
@@ -47,18 +66,30 @@ lazy_static! {
     });
 }
 
-/// The only way to get active page table
+/**
+ * @brief The only way to get active page table.
+ *
+ * @retval The active page table.
+ */
 pub fn active_table() -> MutexGuard<'static, CowExt<ActivePageTable>> {
     ACTIVE_TABLE.lock()
 }
 
-// Return true to continue, false to halt
+/**
+ * @brief Alloc a frame when handle page fault (COW).
+ *
+ * @param addr Page fault address.
+ * @retval Return true to continue, false to halt.
+ */
 pub fn page_fault_handler(addr: usize) -> bool {
     // Handle copy on write
     unsafe { ACTIVE_TABLE.force_unlock(); }
     active_table().page_fault_handler(addr, || alloc_frame().unwrap())
 }
 
+/**
+ * @brief Initialize heap allocator.
+ */
 pub fn init_heap() {
     use consts::KERNEL_HEAP_SIZE;
     static mut HEAP: [u8; KERNEL_HEAP_SIZE] = [0; KERNEL_HEAP_SIZE];

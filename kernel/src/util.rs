@@ -1,3 +1,8 @@
+/**
+ * @file util.rs
+ * @brief Some utility functions.
+ */
+
 use core::fmt::Debug;
 
 /// Convert C string to Rust string

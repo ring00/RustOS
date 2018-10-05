@@ -1,3 +1,8 @@
+/**
+ * @file lib.rs
+ * @brief Rust library enterance.
+ */
+
 #![feature(ptr_internals)]
 #![feature(lang_items)]
 #![feature(const_fn)]
@@ -60,6 +65,14 @@ pub mod arch;
 #[path = "arch/riscv32/mod.rs"]
 pub mod arch;
 
+/**
+ * @brief Platform independent initialization.
+ *
+ * 1. initialize process management;
+ * 2. enable interruption;
+ * 3. goto shell.
+ *
+ */
 pub fn kmain() -> ! {
     process::init();
     unsafe { arch::interrupt::enable(); }

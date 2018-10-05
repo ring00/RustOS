@@ -1,12 +1,20 @@
-// Rust language features implementions
+/**
+ * @file lang.rs
+ * @brief Rust language features implementions.
+ */
 
 use core::panic::PanicInfo;
 use core::alloc::Layout;
 
-#[lang = "eh_personality"] 
+#[lang = "eh_personality"]
 extern fn eh_personality() {
 }
 
+/**
+ * @brief Print error messages with location and loop forever.
+ *
+ * @param info PanicInfo
+ */
 #[panic_handler]
 #[no_mangle]
 pub fn panic(info: &PanicInfo) -> ! {
@@ -16,6 +24,9 @@ pub fn panic(info: &PanicInfo) -> ! {
     loop { }
 }
 
+/**
+ * @brief Out of memory panic.
+ */
 #[lang = "oom"]
 #[no_mangle]
 pub fn oom(_: Layout) -> ! {

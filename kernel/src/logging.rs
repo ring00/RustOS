@@ -1,3 +1,8 @@
+/**
+ * @file logging.rs
+ * @brief Logging system.
+ */
+
 use core::fmt;
 use log::{self, Level, LevelFilter, Log, Metadata, Record};
 

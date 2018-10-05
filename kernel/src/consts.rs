@@ -1,3 +1,8 @@
+/**
+ * @file const.rs
+ * @brief Defined some constants.
+ */
+
 #![allow(dead_code)]
 
 #[cfg(target_arch = "riscv32")]
