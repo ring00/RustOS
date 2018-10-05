@@ -1,0 +1,7 @@
+@program    /ucore32.img/badsegment
+
+  - 'badsegment'
+  	'user panic at user/badsegment.c:9:'
+  	'	FAIL: T.T'
+
+

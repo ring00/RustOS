@@ -1,0 +1,41 @@
+@program    /ucore32.img/priority
+@arch       riscv32
+
+  - 'priority'
+	'priority process will sleep 400 ticks'
+	'main: fork ok,now need to wait pids.'
+	'child pid 7, acc 4000, time 12898'
+	'child pid 6, acc 4000, time 12898'
+	'child pid 5, acc 4000, time 12898'
+	'child pid 4, acc 4000, time 12898'
+	'child pid 3, acc 4000, time 12898'
+	'main: pid 3, acc 4000, time 12898'
+	'main: pid 4, acc 4000, time 12898'
+	'main: pid 5, acc 4000, time 12899'
+	'main: pid 6, acc 4000, time 12899'
+	'main: pid 7, acc 4000, time 12899'
+	'main: wait pids over'
+	'stride sched correct result: 1 1 1 1 1'
+
+
+
+
+@program    /xv6_64.img/priority
+@arch       x86_64
+
+  - 'priority'
+	'priority process will sleep 400 ticks'
+	'child pid 6, acc 4000, time 3723'
+	'child pid 5, acc 4000, time 3724'
+	'child pid 4, acc 4000, time 3725'
+	'child pid 3, acc 4000, time 3725'
+	'main: fork ok,now need to wait pids.'
+	'main: pid 3, acc 4000, time 3727'
+	'main: pid 4, acc 4000, time 3728'
+	'main: pid 5, acc 4000, time 3728'
+	'main: pid 6, acc 4000, time 3729'
+	'child pid 7, acc 4000, time 3729'
+	'main: pid 7, acc 4000, time 3730'
+	'main: wait pids over'
+	'stride sched correct result: 1 1 1 1 1'
+	

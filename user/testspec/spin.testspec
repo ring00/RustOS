@@ -1,0 +1,10 @@
+@program	/ucore32.img/spin
+
+  - 'spin'
+    'I am the parent. Forking the child...'
+    'I am the parent. Running the child...'
+    'I am the child. spinning ...'
+    'I am the parent.  Killing the child...'
+    'kill returns 0'
+    'wait returns 0'
+    'spin may pass.'

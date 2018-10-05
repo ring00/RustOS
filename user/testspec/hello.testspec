@@ -1,0 +1,8 @@
+@program    /ucore32.img/hello
+
+  - 'hello'
+	'Hello world!!.'
+	'I am process 2.'
+	'hello pass.'
+
+

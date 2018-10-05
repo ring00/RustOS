@@ -1,0 +1,41 @@
+@program    /ucore32.img/divzero
+@arch       riscv32
+
+  - 'divzero '
+	'value is -1.'
+! -	'user panic at user/divzero.c:9:'
+	'	FAIL: T.T'
+
+
+
+
+@program    /xv6_64.img/divzero
+@arch       x86_64
+@failin     x86_64
+
+  - 'divzero'
+! -	'[ERROR] Process 2 error:'
+	'TrapFrame {'
+	'	r15: 0x0,'
+	'	r14: 0x0,'
+	'	r13: 0x0,'
+	'	r12: 0x0,'
+	'	rbp: 0xb00fff88,'
+	'	rbx: 0x0,'
+	'	r11: 0x0,'
+	'	r10: 0x0,'
+	'	r9: 0x0,'
+	'	r8: 0x0,'
+	'	rsi: 0x0,'
+	'	rdi: 0x0,'
+	'	rdx: 0x0,'
+	'	rcx: 0x0,'
+	'	rax: 0x1,'
+	'	trap_num: 0x0,'
+	'	error_code: 0x0,'
+	'	rip: 0x8015b9,'
+	'	cs: 0x23,'
+	'	rflags: 0x282,'
+	'	rsp: 0xb00fff80,'
+	'	ss: 0x2b'
+	'}'

@@ -1,0 +1,26 @@
+@program    /ucore32.img/badarg
+@arch       riscv32
+@failin     riscv32
+@timeout	10
+
+  - 'badarg'
+! -	'[ERROR] '
+
+! -	'PANIC in /home/kmy/.rustup/toolchains/nightly-2018-09-18-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src/libcore/option.rs at line 345'
+	'	called `Option::unwrap()` on a `None` value'
+
+
+
+
+@program    /xv6_64.img/divzero
+@arch     x86_64
+@failin     x86_64
+@timeout	10
+
+  - 'badarg'
+	'fork ok.'
+! -	'[ERROR] '
+
+! -	'PANIC in /home/kmy/.rustup/toolchains/nightly-2018-09-18-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src/libcore/option.rs at line 345'
+	'	called `Option::unwrap()` on a `None` value'
+

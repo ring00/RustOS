@@ -1,0 +1,23 @@
+@program    /ucore32.img/testbss
+@arch       riscv32
+@failin     riscv32
+
+  - 'testbss'
+! - '[ERROR] '
+
+    'PANIC in /home/kmy/.rustup/toolchains/nightly-2018-09-18-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src/libcore/option.rs at line 1000'
+    '    failed to allocate frame'
+
+
+
+
+
+@program    /xv6_64.img/testbss
+@arch     x86_64
+
+  - 'testbss'
+    'Making sure bss works right...'
+    'user panic at user/testbss.c:14:'
+    '    bigarray[14248] isn't cleared!'
+
+

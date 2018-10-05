@@ -1,0 +1,41 @@
+@program    /ucore32.img/forktree
+@timeout	500
+@failin   riscv32, x86_64
+
+  - 'forktree'
+	'forktree process will sleep 400 ticks'
+	'0002: I am '''
+  -	'0004: I am '1''
+	'0005: I am '11''
+	'0007: I am '111''
+	'0009: I am '1111''
+	'0008: I am '1110''
+	'0006: I am '110''
+	'000b: I am '1101''
+	'000a: I am '1100''
+	'0003: I am '0''
+	'000d: I am '01''
+	'000f: I am '011''
+	'0011: I am '0111''
+	'0010: I am '0110''
+	'000e: I am '010''
+	'0013: I am '0101''
+	'0012: I am '0100''
+	'000c: I am '00''
+	'0015: I am '001''
+	'0017: I am '0011''
+	'0016: I am '0010''
+	'0014: I am '000''
+	'0019: I am '0001''
+	'0018: I am '0000''
+	'0002: I am '10''
+	'001b: I am '101''
+	'001d: I am '1011''
+	'001c: I am '1010''
+	'001a: I am '100''
+	'001f: I am '1001''
+	'001e: I am '1000''
+! - [ERROR] 
+
+    PANIC in /home/kmy/OperatingSystem/RustOS/crate/process/src/scheduler.rs at line 136
+		attempt to add with overflow

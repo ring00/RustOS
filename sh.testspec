@@ -1,0 +1,21 @@
+@program    /ucore32.img/waitkill
+@arch       riscv32
+
+  - 'waitkill' 
+    'wait child 1.'
+    'child 2.'
+    'child 1.'
+    'kill parent ok.'
+  - 'kill child1 ok.'
+
+
+
+@program    /xv6_64.img/waitkill
+@arch       x86_64
+
+  - 'waitkill' 
+    'wait child 1.'
+    'child 2.'
+    'child 1.'
+    'kill parent ok.'
+    'kill child1 ok.'

@@ -1,0 +1,35 @@
+@program	  /ucore32.img/sleep
+@arch       riscv32
+
+  - 'sleep'
+    'sleep 1 x 100 slices.'
+    'sleep 2 x 100 slices.'
+    'sleep 3 x 100 slices.'
+    'sleep 4 x 100 slices.'
+    'sleep 5 x 100 slices.'
+    'sleep 6 x 100 slices.'
+    'sleep 7 x 100 slices.'
+    'sleep 8 x 100 slices.'
+    'sleep 9 x 100 slices.'
+    'sleep 10 x 100 slices.'
+    'use 1000 msecs.'
+    'sleep pass.'
+
+
+
+@program	  /xv6_64.img/sleep
+@arch       x86_64
+
+  - 'sleep'
+    'sleep 1 x 100 slices.'
+    'sleep 2 x 100 slices.'
+    'sleep 3 x 100 slices.'
+    'sleep 4 x 100 slices.'
+    'sleep 5 x 100 slices.'
+    'sleep 6 x 100 slices.'
+    'sleep 7 x 100 slices.'
+    'sleep 8 x 100 slices.'
+    'sleep 9 x 100 slices.'
+    'sleep 10 x 100 slices.'
+    'use 1001 msecs.'
+    'sleep pass.'

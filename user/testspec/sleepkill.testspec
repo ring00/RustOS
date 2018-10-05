@@ -1,0 +1,21 @@
+@program    /ucore32.img/sleepkill
+@arch       riscv32
+@failin     riscv32
+@timeout	10
+
+  - 'sleepkill'
+! - '[ERROR] '
+
+    'PANIC in /home/kmy/OperatingSystem/RustOS/crate/process/src/event_hub.rs at line 55'
+    '    attempt to add with overflow'
+
+
+
+
+@program    /xv6_64.img/sleepkill
+@arch     x86_64
+
+
+  - 'sleepkill'
+    'sleepkill pass.'
+
