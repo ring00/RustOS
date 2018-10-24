@@ -7,6 +7,7 @@ authors = ["Runji Wang <wangrunji0408@163.com>"]
 use_apic = []
 link_user_program = []
 no_bbl = []
+zedboard = []
 
 [profile.dev]
 # MUST >= 1 : Enable RVO to avoid stack overflow

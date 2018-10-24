@@ -56,8 +56,12 @@ mod console;
 #[path = "arch/x86_64/mod.rs"]
 pub mod arch;
 
-#[cfg(target_arch = "riscv32")]
+#[cfg(all(target_arch = "riscv32", not(feature = "zedboard")))]
 #[path = "arch/riscv32/mod.rs"]
+pub mod arch;
+
+#[cfg(all(target_arch = "riscv32", feature = "zedboard"))]
+#[path = "arch/riscv32_zedboard/mod.rs"]
 pub mod arch;
 
 pub fn kmain() -> ! {

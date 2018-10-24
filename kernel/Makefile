@@ -14,6 +14,7 @@
 #   LOG  = off | error | warn | info | debug | trace
 #   smp                         SMP core number
 #   board 						Only available on riscv32, build without bbl, run on board
+#   zedboard 					Only available on riscv32, for LvNA-project only.
 
 arch ?= riscv32
 mode ?= debug
@@ -43,6 +44,10 @@ endif
 
 ifdef board
 features := $(features) no_bbl
+endif
+
+ifdef zedboard
+features := $(features) zedboard
 endif
 
 # Link user binaries at ../user
