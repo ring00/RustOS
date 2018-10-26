@@ -19,7 +19,7 @@
 arch ?= riscv32
 mode ?= debug
 LOG  ?= debug
-smp  ?= 1
+smp  ?= 4
 
 target := $(arch)-blog_os
 kernel := target/$(target)/$(mode)/ucore
@@ -34,12 +34,16 @@ ifeq ($(arch), x86_64)
 qemu_opts := \
 	-drive format=raw,file=$(bootimage) \
 	-drive format=raw,file=$(SFSIMG),media=disk,cache=writeback \
-	-smp $(smp) \
+	-smp cores=$(smp) \
 	-serial mon:stdio \
 	-device isa-debug-exit
 endif
 ifeq ($(arch), riscv32)
-qemu_opts := -machine virt -kernel $(bin) -nographic -smp cpus=$(smp)
+qemu_opts := \
+	-machine virt \
+	-kernel $(bin) \
+	-nographic \
+	-smp cores=$(smp)
 endif
 
 ifdef board
@@ -76,13 +80,12 @@ ifeq ($(uname), Darwin)
 prefix := x86_64-elf-
 endif
 ifeq ($(arch), riscv32)
-prefix := riscv32-unknown-elf-
+prefix := riscv64-unknown-elf-
 endif
 
 ld := $(prefix)ld
 objdump := $(prefix)objdump
 cc := $(prefix)gcc
-CC := $(cc)
 as := $(prefix)as
 
 .PHONY: all clean run build asm doc justrun kernel
@@ -112,8 +115,11 @@ endif
 asm:
 	@$(objdump) -dS $(kernel) | less
 
-elf-h:
+header:
 	@$(objdump) -h $(kernel)
+
+sym:
+	@$(objdump) -t $(kernel) | less
 
 $(bin): kernel
 ifdef board
@@ -126,7 +132,7 @@ else
 	 	--enable-32bit \
 	 	--enable-logo \
 	 	--disable-fp-emulation \
-	 	--host=riscv32-unknown-elf \
+	 	--host=riscv64-unknown-elf \
 	 	--with-payload=$(abspath $(kernel)) && \
 	 make && \
 	 cp bbl ../../kernel/$@
@@ -136,7 +142,7 @@ kernel:
 ifeq ($(arch), x86_64)
 	@bootimage build $(build_args)
 else
-	@cargo xbuild $(build_args)
+	@CC=$(cc) cargo xbuild $(build_args)
 endif
 
 # make user.o from binary files

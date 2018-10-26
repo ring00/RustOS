@@ -1,53 +1,46 @@
 use spin::Once;
 use sync::{SpinNoIrqLock, Mutex, MutexGuard, SpinNoIrq};
-pub use self::context::Context;
-pub use ucore_process::processor::{*, Context as _whatever};
-pub use ucore_process::scheduler::*;
-pub use ucore_process::thread::*;
+pub use self::context::ContextImpl;
+pub use ucore_process::*;
+use alloc::boxed::Box;
+use consts::MAX_CPU_NUM;
+use arch::cpu;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
 
 mod context;
 
-type Processor = Processor_<Context, StrideScheduler>;
-
 pub fn init() {
-    PROCESSOR.call_once(||
-        SpinNoIrqLock::new({
-            let mut processor = Processor::new(
-                unsafe { Context::new_init() },
-                // NOTE: max_time_slice <= 5 to ensure 'priority' test pass
-                StrideScheduler::new(5),
-            );
-            extern fn idle(arg: usize) -> ! {
-                loop {}
-            }
-            processor.add(Context::new_kernel(idle, 0));
-            processor
-        })
-    );
+    // NOTE: max_time_slice <= 5 to ensure 'priority' test pass
+    let scheduler = Box::new(scheduler::RRScheduler::new(5));
+    let manager = Arc::new(ProcessManager::new(scheduler));
+
+    extern fn idle(_arg: usize) -> ! {
+        loop { cpu::halt(); }
+    }
+    for i in 0..4 {
+        manager.add(ContextImpl::new_kernel(idle, i));
+    }
+
+    unsafe {
+        for cpu_id in 0..MAX_CPU_NUM {
+            PROCESSORS[cpu_id].init(cpu_id, ContextImpl::new_init(), manager.clone());
+        }
+    }
     info!("process init end");
 }
 
-pub static PROCESSOR: Once<SpinNoIrqLock<Processor>> = Once::new();
+static PROCESSORS: [Processor; MAX_CPU_NUM] = [Processor::new(), Processor::new(), Processor::new(), Processor::new(), Processor::new(), Processor::new(), Processor::new(), Processor::new()];
 
-pub fn processor() -> MutexGuard<'static, Processor, SpinNoIrq> {
-    PROCESSOR.try().unwrap().lock()
+
+// Implement dependencies for std::thread
+
+#[no_mangle]
+pub fn processor() -> &'static Processor {
+    &PROCESSORS[cpu::id()]
 }
 
-#[allow(non_camel_case_types)]
-pub type thread = ThreadMod<ThreadSupportImpl>;
-
-pub mod thread_ {
-    pub type Thread = super::Thread<super::ThreadSupportImpl>;
-}
-
-pub struct ThreadSupportImpl;
-
-impl ThreadSupport for ThreadSupportImpl {
-    type Context = Context;
-    type Scheduler = StrideScheduler;
-    type ProcessorGuard = MutexGuard<'static, Processor, SpinNoIrq>;
-
-    fn processor() -> Self::ProcessorGuard {
-        processor()
-    }
+#[no_mangle]
+pub fn new_kernel_context(entry: extern fn(usize) -> !, arg: usize) -> Box<Context> {
+    ContextImpl::new_kernel(entry, arg)
 }
