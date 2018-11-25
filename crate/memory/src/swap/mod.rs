@@ -12,6 +12,7 @@ use super::memory_set::InactivePageTable;
 use super::addr::Frame;
 use alloc::rc::Rc;
 use core::ops::{Deref, DerefMut};
+use spin;
 
 //pub use self::fifo::FifoSwapManager;
 //pub use self::enhanced_clock::EnhancedClockSwapManager;
@@ -82,13 +83,13 @@ pub trait Swapper {
 }
 
 /// Wrapper for page table, supporting swap functions
-pub struct SwapExt<T: PageTable, M: SwapManager, S: Swapper> {
-    page_table: T,
+pub struct SwapExt<M: SwapManager, S: Swapper> {
+    //page_table: T,
     swap_manager: M,
     swapper: S,
 }
 
-impl<T: PageTable, M: SwapManager, S: Swapper> SwapExt<T, M, S> {
+impl<M: SwapManager, S: Swapper> SwapExt<M, S> {
     /*
     **  @brief  create a swap extension
     **  @param  page_table: T        the inner page table
@@ -96,9 +97,8 @@ impl<T: PageTable, M: SwapManager, S: Swapper> SwapExt<T, M, S> {
     **  @param  swapper: S           the Swapper used
     **  @retval SwapExt              the swap extension created
     */
-    pub fn new(page_table: T, swap_manager: M, swapper: S) -> Self {
+    pub fn new(swap_manager: M, swapper: S) -> Self {
         SwapExt {
-            page_table,
             swap_manager,
             swapper,
         }
@@ -109,8 +109,8 @@ impl<T: PageTable, M: SwapManager, S: Swapper> SwapExt<T, M, S> {
     **  @param pt: *mut T2           the raw pointer for the target page's inactive page table
     **  @param addr: VirtAddr        the target page's virtual address
     */
-    pub unsafe fn set_swappable<T2: InactivePageTable>(&mut self, pt: *mut T2, addr: VirtAddr){
-        let Self {ref mut page_table, ref mut swap_manager, ref mut swapper} = self;
+    pub unsafe fn set_swappable<T: PageTable, T2: InactivePageTable>(&mut self, page_table: &mut T, pt: *mut T2, addr: VirtAddr){
+        let Self {ref mut swap_manager, ref mut swapper} = self;
         let targetpt = &mut *(pt);
         let pttoken = {
             info!("SET_SWAPPABLE: the target page table token is {:x?}, addr is {:x?}", targetpt.token(), addr);
@@ -138,9 +138,9 @@ impl<T: PageTable, M: SwapManager, S: Swapper> SwapExt<T, M, S> {
     **  @param addr: VirtAddr        the target page's virtual address
     **  @param alloc_frame:          the function to alloc a free physical frame for once
     */
-    pub unsafe fn remove_from_swappable<T2: InactivePageTable>(&mut self, pt: *mut T2, addr: VirtAddr, alloc_frame: impl FnOnce() -> PhysAddr){
+    pub unsafe fn remove_from_swappable<T: PageTable, T2: InactivePageTable>(&mut self, page_table: &mut T, pt: *mut T2, addr: VirtAddr, alloc_frame: impl FnOnce() -> PhysAddr){
         //info!("come into remove_from swappable");
-        let Self {ref mut page_table, ref mut swap_manager, ref mut swapper} = self;
+        let Self {ref mut swap_manager, ref mut swapper} = self;
         let targetpt = &mut *(pt);
         let pttoken = {
             info!("SET_UNSWAPPABLE: the target page table token is {:x?}, addr is {:x?}", targetpt.token(), addr);
@@ -190,16 +190,16 @@ impl<T: PageTable, M: SwapManager, S: Swapper> SwapExt<T, M, S> {
     **                               the physics address of released frame if success,
     **                               the error if failed
     */
-    pub fn swap_out_any<T2: InactivePageTable>(&mut self) -> Result<PhysAddr, SwapError> {
+    pub fn swap_out_any<T: PageTable, T2: InactivePageTable>(&mut self, page_table: &mut T) -> Result<PhysAddr, SwapError> {
         info!("COME in to swap_out_any");
         let victim: Option<Frame> = {
-            let Self {ref mut page_table, ref mut swap_manager, ref mut swapper} = self;
+            let Self {ref mut swap_manager, ref mut swapper} = self;
             swap_manager.pop(page_table, swapper)
         };
         info!("swap out page {}", victim.unwrap().get_virtaddr());
         match victim {
             None => Err(SwapError::NoSwapped),
-            Some(frame) => self.swap_out::<T2>(&frame),
+            Some(frame) => self.swap_out::<T, T2>(page_table, &frame),
         }
     }
 
@@ -210,8 +210,8 @@ impl<T: PageTable, M: SwapManager, S: Swapper> SwapExt<T, M, S> {
     **                               the physics address of the original map target frame if success,
     **                               the error if failed
     */
-    fn swap_out<T2: InactivePageTable>(&mut self, frame: &Frame) -> Result<PhysAddr, SwapError> {
-        let Self {ref mut page_table, ref mut swap_manager, ref mut swapper} = self;
+    fn swap_out<T: PageTable, T2: InactivePageTable>(&mut self, page_table: &mut T, frame: &Frame) -> Result<PhysAddr, SwapError> {
+        let Self {ref mut swap_manager, ref mut swapper} = self;
         let ret = unsafe{
             let pt = &mut *(frame.get_page_table() as *mut T2);
             pt.with(|| {
@@ -244,9 +244,9 @@ impl<T: PageTable, M: SwapManager, S: Swapper> SwapExt<T, M, S> {
     **  @retval Result<()), SwapError>
     **                               the execute result, and the error if failed
     */
-    fn swap_in<T2: InactivePageTable>(&mut self, pt: *mut T2, addr: VirtAddr, target: PhysAddr) -> Result<(), SwapError> {
+    fn swap_in<T: PageTable, T2: InactivePageTable>(&mut self, page_table: &mut T, pt: *mut T2, addr: VirtAddr, target: PhysAddr) -> Result<(), SwapError> {
         info!("come in to swap in");
-        let entry = self.page_table.get_entry(addr)
+        let entry = page_table.get_entry(addr)
             .ok_or(SwapError::NotMapped)?;
         if !entry.swapped() {
             return Err(SwapError::NotSwapped);
@@ -256,7 +256,7 @@ impl<T: PageTable, M: SwapManager, S: Swapper> SwapExt<T, M, S> {
         entry.set_swapped(false);
         entry.set_present(true);
         entry.update();
-        let data = self.page_table.get_page_slice_mut(addr);
+        let data = page_table.get_page_slice_mut(addr);
         self.swapper.swap_in(token, data).map_err(|_| SwapError::IOError)?;
         let pttoken = unsafe{
             (*pt).token()
@@ -278,12 +278,12 @@ impl<T: PageTable, M: SwapManager, S: Swapper> SwapExt<T, M, S> {
     **                               of beginning of the page
     **  @retval bool                 whether swap in happens.
     */
-    pub fn page_fault_handler<T2: InactivePageTable>(&mut self, pt: *mut T2, addr: VirtAddr, swapin: bool, alloc_frame: impl FnOnce() -> PhysAddr) -> bool {
+    pub fn page_fault_handler<T: PageTable, T2: InactivePageTable>(&mut self, page_table: &mut T, pt: *mut T2, addr: VirtAddr, swapin: bool, alloc_frame: impl FnOnce() -> PhysAddr) -> bool {
         // handle page delayed allocating
         {
             info!("try handling delayed frame allocator");
             let need_alloc ={
-                let entry = self.page_table.get_entry(addr).expect("fail to get entry");
+                let entry = page_table.get_entry(addr).expect("fail to get entry");
                 //info!("got entry!");
                 !entry.present() && !entry.swapped()
             };
@@ -292,7 +292,7 @@ impl<T: PageTable, M: SwapManager, S: Swapper> SwapExt<T, M, S> {
                 info!("need_alloc!");
                 let frame = alloc_frame();
                 {
-                    let entry = self.page_table.get_entry(addr).unwrap();
+                    let entry = page_table.get_entry(addr).unwrap();
                     entry.set_target(frame);
                     //let new_entry = self.page_table.map(addr, frame);
                     entry.set_present(true);
@@ -300,7 +300,7 @@ impl<T: PageTable, M: SwapManager, S: Swapper> SwapExt<T, M, S> {
                 }
                 if(swapin){
                     unsafe {
-                        self.set_swappable(pt, addr & 0xfffff000);
+                        self.set_swappable(page_table, pt, addr & 0xfffff000);
                     }
                 }
                 //area.get_flags().apply(new_entry); this instruction may be used when hide attr is used
@@ -310,14 +310,14 @@ impl<T: PageTable, M: SwapManager, S: Swapper> SwapExt<T, M, S> {
             info!("not need alloc!");
         }
         // now we didn't attach the cow so the present will be false when swapped(), to enable the cow some changes will be needed
-        match self.page_table.get_entry(addr) {
+        match page_table.get_entry(addr) {
             // infact the get_entry(addr) should not be None here
             None => return false,
             Some(entry) => if !entry.swapped() { return false; },
         }
         // Allocate a frame, if failed, swap out a page
         let frame = alloc_frame();
-        self.swap_in(pt, addr, frame).ok().unwrap();
+        self.swap_in(page_table, pt, addr, frame).ok().unwrap();
         true
     }
 }
@@ -335,6 +335,7 @@ pub enum SwapError {
     IOError,
 }
 
+/*
 impl<T: PageTable, M: SwapManager, S: Swapper> Deref for SwapExt<T, M, S> {
     type Target = T;
 
@@ -348,7 +349,7 @@ impl<T: PageTable, M: SwapManager, S: Swapper> DerefMut for SwapExt<T, M, S> {
         &mut self.page_table
     }
 }
-
+*/
 /*
 #[cfg(test)]
 mod test {
