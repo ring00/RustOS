@@ -26,6 +26,7 @@ pub fn init() {
         manager.add(ContextImpl::new_kernel(idle, i), 0);
     }
     ::shell::run_user_shell();
+    ::thread::spawn(::sync::test::philosopher_using_mutex);
 
     info!("process init end");
 }
