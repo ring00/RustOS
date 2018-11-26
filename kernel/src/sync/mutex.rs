@@ -191,6 +191,11 @@ impl<'a, T: ?Sized, S: MutexSupport> Drop for MutexGuard<'a, T, S>
     }
 }
 
+impl<'a, T: ?Sized, S: MutexSupport>  MutexGuard<'a, T, S>
+{
+    pub fn get_data_mut(&mut self) -> &mut T { unsafe { &mut *self.mutex.data.get() } }
+}
+
 /// Low-level support for mutex
 pub trait MutexSupport {
     type GuardData;

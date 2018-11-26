@@ -1,5 +1,5 @@
 use arch::interrupt::{TrapFrame, Context as ArchContext};
-use memory::{MemoryArea, MemoryAttr, MemorySet, KernelStack, active_table_swap, alloc_frame};
+use memory::{MemoryArea, MemoryAttr, MemorySet, KernelStack, active_table_swap, alloc_frame, active_table};
 use xmas_elf::{ElfFile, header, program::{Flags, ProgramHeader, Type}};
 use core::fmt::{Debug, Error, Formatter};
 use ucore_process::Context;
@@ -206,7 +206,7 @@ impl Drop for ContextImpl{
             for page in Page::range_of(area.get_start_addr(), area.get_end_addr()) {
                 let addr = page.start_address();
                 unsafe {
-                    active_table_swap().remove_from_swappable(pt, addr, || alloc_frame().expect("alloc frame failed"));
+                    active_table_swap().remove_from_swappable(active_table().get_data_mut(), pt, addr, || alloc_frame().expect("alloc frame failed"));
                 }
             }
         }
@@ -293,7 +293,7 @@ pub fn memory_set_map_swappable(memory_set: &mut MemorySet){
     for area in memory_set.iter(){
         for page in Page::range_of(area.get_start_addr(), area.get_end_addr()) {
             let addr = page.start_address();
-            unsafe { active_table_swap().set_swappable(pt, addr); }
+            unsafe { active_table_swap().set_swappable(active_table().get_data_mut(), pt, addr); }
         }
     }
     info!("Finishing setting pages swappable");
