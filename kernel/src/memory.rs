@@ -6,7 +6,7 @@ use super::HEAP_ALLOCATOR;
 use ucore_memory::{*, paging::PageTable};
 use ucore_memory::cow::CowExt;
 pub use ucore_memory::memory_set::{MemoryArea, MemoryAttr, MemorySet as MemorySet_, InactivePageTable, MemoryHandler};
-use ucore_memory::swap::*;
+use ucore_memory::swap::{fifo, mock_swapper, SwapExt as SwapExt_};
 //use process::{processor, PROCESSOR};
 use process::{process};
 use sync::{SpinNoIrqLock, SpinNoIrq, MutexGuard};
@@ -15,6 +15,7 @@ use alloc::sync::Arc;
 use alloc::boxed::Box;
 
 pub type MemorySet = MemorySet_<InactivePageTable0>;
+pub type SwapExtType = SwapExt_<fifo::FifoSwapManager, mock_swapper::MockSwapper>;
 
 // x86_64 support up to 256M memory
 #[cfg(target_arch = "x86_64")]
@@ -74,12 +75,12 @@ pub fn active_table_swap() -> MutexGuard<'static, SwapExt<ActivePageTable, fifo:
 */
 
 lazy_static!{
-    static ref ACTIVE_TABLE_SWAP: spin::Mutex<SwapExt<fifo::FifoSwapManager, mock_swapper::MockSwapper>> = 
-        spin::Mutex::new(unsafe{SwapExt::new(fifo::FifoSwapManager::default(), mock_swapper::MockSwapper::default())});
+    pub static ref SWAP_TABLE: Arc<spin::Mutex<SwapExtType>> = 
+        Arc::new(spin::Mutex::new(SwapExtType::new(fifo::FifoSwapManager::default(), mock_swapper::MockSwapper::default())));
 }
 
-pub fn active_table_swap() -> spin::MutexGuard<'static, SwapExt<fifo::FifoSwapManager, mock_swapper::MockSwapper>>{
-    ACTIVE_TABLE_SWAP.lock()
+pub fn swap_table() -> spin::MutexGuard<'static, SwapExtType>{
+    SWAP_TABLE.lock()
 }
 
 /*
@@ -93,7 +94,7 @@ pub fn alloc_frame() -> Option<usize> {
     let ret = FRAME_ALLOCATOR.lock().alloc().map(|id| id * PAGE_SIZE + MEMORY_OFFSET);
     trace!("Allocate frame: {:x?}", ret);
     //do we need : unsafe { ACTIVE_TABLE_SWAP.force_unlock(); } ???
-    Some(ret.unwrap_or_else(|| active_table_swap().swap_out_any::<ActivePageTable, InactivePageTable0>(active_table().get_data_mut()).ok().expect("fail to swap out page")))
+    Some(ret.unwrap_or_else(|| swap_table().swap_out_any::<ActivePageTable, InactivePageTable0>(active_table().get_data_mut()).ok().expect("fail to swap out page")))
 }
 
 pub fn dealloc_frame(target: usize) {
@@ -156,7 +157,7 @@ pub fn page_fault_handler(addr: usize) -> bool {
 
             let pt = current_mmset.get_page_table_mut();
             info!("pt got!");
-            if active_table_swap().page_fault_handler(active_table().get_data_mut(), pt as *mut InactivePageTable0, addr, false, || alloc_frame().expect("fail to alloc frame")){
+            if swap_table().page_fault_handler(active_table().get_data_mut(), pt as *mut InactivePageTable0, addr, false, || alloc_frame().expect("fail to alloc frame")){
                 return true;
             }
         },
@@ -168,7 +169,7 @@ pub fn page_fault_handler(addr: usize) -> bool {
 
             let pt = process().get_memory_set_mut().get_page_table_mut();
             info!("pt got");
-            if active_table_swap().page_fault_handler(active_table().get_data_mut(), pt as *mut InactivePageTable0, addr, false, || alloc_frame().expect("fail to alloc frame")){
+            if swap_table().page_fault_handler(active_table().get_data_mut(), pt as *mut InactivePageTable0, addr, true, || alloc_frame().expect("fail to alloc frame")){
                 return true;
             }
         },
@@ -277,13 +278,13 @@ impl NormalMemoryHandler{
         }
     }
 }
-/*
-pub struct SwapMemoryHandler<M: SwapManager, S: Swapper>{
-    swap_ext: Arc<spin::Mutex<SwapExt<M, S>>>,
+
+pub struct SwapMemoryHandler{
+    swap_ext: Arc<spin::Mutex<SwapExtType>>,
     flags: MemoryAttr,
 }
 
-impl<M: SwapManager, S: Swapper> MemoryHandler for SwapMemoryHandler<M, S>{
+impl MemoryHandler for SwapMemoryHandler{
     //type Active = ActivePageTable;
     //type Inactvie = InactivePageTable0;
     fn box_clone(&self) -> Box<MemoryHandler>{
@@ -319,18 +320,18 @@ impl<M: SwapManager, S: Swapper> MemoryHandler for SwapMemoryHandler<M, S>{
 
 }
 
-impl<M: SwapManager, S: Swapper> SwapMemoryHandler<M, S>{
-    pub fn new(swap_ext: Arc<spin::Mutex<SwapExt<M, S>>>, flags: MemoryAttr){
-        SwapMemoryHandler::<M, S>{
+impl SwapMemoryHandler{
+    pub fn new(swap_ext: Arc<spin::Mutex<SwapExtType>>, flags: MemoryAttr) -> Self {
+        SwapMemoryHandler{
             swap_ext,
             flags,
         }
     }
 }
 
-impl<M: SwapManager, S: Swapper> Clone for SwapMemoryHandler<M, S>{
+
+impl Clone for SwapMemoryHandler{
     fn clone(&self) -> Self{
-        SwapMemoryHandler::<M, S>::new(self.swap_ext.clone(), self.flags.clone())
+        SwapMemoryHandler::new(self.swap_ext.clone(), self.flags.clone())
     }
 }
-*/

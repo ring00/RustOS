@@ -5,6 +5,8 @@ use alloc::vec::Vec;
 use core::fmt::{Debug, Error, Formatter};
 use super::*;
 use paging::*;
+use alloc::boxed::Box;
+use core::clone::Clone;
 
 /// an inactive page table
 /// Note: InactivePageTable is not a PageTable
@@ -62,15 +64,32 @@ pub trait InactivePageTable {
     */
     fn dealloc_frame(target: PhysAddr);
 }
+// here may be a interesting part for lab
+pub trait MemoryHandler{
+    fn box_clone(&self) -> Box<MemoryHandler>;
+
+    fn map(&self, pt: &mut PageTable, addr: VirtAddr);
+
+    fn unmap(&self, pt: &mut PageTable, addr:VirtAddr);
+
+    //fn page_fault_handler(&mut self, page_table: &mut PageTable, pt: usize, addr: VirtAddr) -> bool;
+}
+
+impl Clone for Box<MemoryHandler> {
+    fn clone(&self) -> Box<MemoryHandler> {
+        self.box_clone()
+    }
+}
 
 /// a continuous memory space when the same attribute
 /// like `vma_struct` in ucore
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Clone)]
 pub struct MemoryArea {
     start_addr: VirtAddr,
     end_addr: VirtAddr,
-    phys_start_addr: Option<PhysAddr>,
-    flags: MemoryAttr,
+    //phys_start_addr: Option<PhysAddr>,
+    //flags: MemoryAttr,
+    memory_handler: Box<MemoryHandler>,
     name: &'static str,
 }
 
@@ -83,9 +102,9 @@ impl MemoryArea {
     **  @param  name: &'static str   the name of the memory area
     **  @retval MemoryArea           the memory area created
     */
-    pub fn new(start_addr: VirtAddr, end_addr: VirtAddr, flags: MemoryAttr, name: &'static str) -> Self {
+    pub fn new(start_addr: VirtAddr, end_addr: VirtAddr, memory_handler: Box<MemoryHandler>, name: &'static str) -> Self {
         assert!(start_addr <= end_addr, "invalid memory area");
-        MemoryArea { start_addr, end_addr, phys_start_addr: None, flags, name }
+        MemoryArea { start_addr, end_addr, memory_handler, name }
     }
     /*
     **  @brief  create a memory area from virtual address which is identically mapped
@@ -95,26 +114,12 @@ impl MemoryArea {
     **  @param  name: &'static str   the name of the memory area
     **  @retval MemoryArea           the memory area created
     */
-    pub fn new_identity(start_addr: VirtAddr, end_addr: VirtAddr, flags: MemoryAttr, name: &'static str) -> Self {
-        assert!(start_addr <= end_addr, "invalid memory area");
-        MemoryArea { start_addr, end_addr, phys_start_addr: Some(start_addr), flags, name }
-    }
     /*
-    **  @brief  create a memory area from physics address
-    **  @param  start_addr: PhysAddr the physics address of beginning of the area
-    **  @param  end_addr: PhysAddr   the physics address of end of the area
-    **  @param  offset: usiz         the offset between physics address and virtual address
-    **  @param  flags: MemoryAttr    the common memory attribute of the memory area
-    **  @param  name: &'static str   the name of the memory area
-    **  @retval MemoryArea           the memory area created
-    */
-    pub fn new_physical(phys_start_addr: PhysAddr, phys_end_addr: PhysAddr, offset: usize, flags: MemoryAttr, name: &'static str) -> Self {
-        let start_addr = phys_start_addr + offset;
-        let end_addr = phys_end_addr + offset;
+    pub fn new_identity(start_addr: VirtAddr, end_addr: VirtAddr, flags: MemoryAttr, memory_handler: Box<MemoryHandler>, name: &'static str) -> Self {
         assert!(start_addr <= end_addr, "invalid memory area");
-        let phys_start_addr = Some(phys_start_addr);
-        MemoryArea { start_addr, end_addr, phys_start_addr, flags, name }
+        MemoryArea { start_addr, end_addr, phys_start_addr: Some(start_addr), flags, memory_handler, name }
     }
+    */
     /*
     **  @brief  get slice of the content in the memory area
     **  @retval &[u8]                the slice of the content in the memory area
@@ -156,7 +161,8 @@ impl MemoryArea {
     **  @param  pt: &mut T::Active   the page table to use
     **  @retval none
     */
-    fn map<T: InactivePageTable>(&self, pt: &mut T::Active) {
+    fn map(&self, pt: &mut PageTable) {
+        /*
         match self.phys_start_addr {
             Some(phys_start) => {
                 for page in Page::range_of(self.start_addr, self.end_addr) {
@@ -184,13 +190,19 @@ impl MemoryArea {
                 info!("finish map delayed!");
             }
         };
+        */
+        for page in Page::range_of(self.start_addr, self.end_addr) {
+            let addr = page.start_address();
+            self.memory_handler.map(pt, addr);
+        }
     }
     /*
     **  @brief  unmap the memory area from the physice address in a page table
     **  @param  pt: &mut T::Active   the page table to use
     **  @retval none
     */
-    fn unmap<T: InactivePageTable>(&self, pt: &mut T::Active) {
+    fn unmap(&self, pt: &mut PageTable) {
+        /*
         for page in Page::range_of(self.start_addr, self.end_addr) {
             let addr = page.start_address();
             if self.phys_start_addr.is_none() {
@@ -205,6 +217,11 @@ impl MemoryArea {
             }
             pt.unmap(addr);
         }
+        */
+        for page in Page::range_of(self.start_addr, self.end_addr) {
+            let addr = page.start_address();
+            self.memory_handler.unmap(pt, addr);
+        }
     }
 
     pub fn get_start_addr(&self) -> VirtAddr {
@@ -214,11 +231,11 @@ impl MemoryArea {
     pub fn get_end_addr(&self) -> VirtAddr{
         self.end_addr
     }
-
+    /*
     pub fn get_flags(&self) -> &MemoryAttr{
         &self.flags
     }
-
+    */
 }
 
 /// The attributes of the memory
@@ -269,7 +286,7 @@ impl MemoryAttr {
     **                               the page table entry to apply the attribute
     **  @retval none
     */
-    fn apply(&self, entry: &mut impl Entry) {
+    pub fn apply(&self, entry: &mut Entry) {
         if self.user { entry.set_user(true); }
         if self.readonly { entry.set_writable(false); }
         if self.execute { entry.set_execute(true); }
@@ -319,7 +336,7 @@ impl<T: InactivePageTable> MemorySet<T> {
         assert!(self.areas.iter()
                     .find(|other| area.is_overlap_with(other))
                     .is_none(), "memory area overlap");
-        self.page_table.edit(|pt| area.map::<T>(pt));
+        self.page_table.edit(|pt| area.map(pt));
         self.areas.push(area);
     }
     /*
@@ -358,12 +375,15 @@ impl<T: InactivePageTable> MemorySet<T> {
     */
     pub fn clear(&mut self) {
         let Self { ref mut page_table, ref mut areas, .. } = self;
+        info!("come in to clear");
         page_table.edit(|pt| {
             for area in areas.iter() {
-                area.unmap::<T>(pt);
+                area.unmap(pt);
             }
         });
+        info!("finish unmmap");
         areas.clear();
+        info!("finish clear");
     }
 
     /*
@@ -381,7 +401,7 @@ impl<T: InactivePageTable> Clone for MemorySet<T> {
         let mut page_table = T::new();
         page_table.edit(|pt| {
             for area in self.areas.iter() {
-                area.map::<T>(pt);
+                area.map(pt);
             }
         });
         info!("finish map in clone!");
@@ -399,6 +419,7 @@ impl<T: InactivePageTable> Drop for MemorySet<T> {
     }
 }
 
+/*
 impl<T: InactivePageTable> Debug for MemorySet<T> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         f.debug_list()
@@ -406,3 +427,4 @@ impl<T: InactivePageTable> Debug for MemorySet<T> {
             .finish()
     }
 }
+*/

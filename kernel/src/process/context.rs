@@ -1,5 +1,5 @@
 use arch::interrupt::{TrapFrame, Context as ArchContext};
-use memory::{MemoryArea, MemoryAttr, MemorySet, KernelStack, active_table_swap, alloc_frame, active_table, NormalMemoryHandler};
+use memory::{MemoryArea, MemoryAttr, MemorySet, KernelStack, swap_table, alloc_frame, active_table, NormalMemoryHandler, SwapMemoryHandler, SWAP_TABLE};
 use xmas_elf::{ElfFile, header, program::{Flags, ProgramHeader, Type}};
 use core::fmt::{Debug, Error, Formatter};
 use ucore_process::Context;
@@ -88,7 +88,7 @@ impl ContextImpl {
         //let id = memory_set_record().iter()
         //    .position(|x| unsafe { info!("current memory set record include {:x?}, {:x?}", x, (*(x.clone() as *mut MemorySet)).get_page_table_mut().token()); false });
 
-        memory_set.push(MemoryArea::new(ustack_buttom, ustack_top, MemoryAttr::default().user(), Box::new(NormalMemoryHandler::new(MemoryAttr::default().user())), "user_stack"));
+        memory_set.push(MemoryArea::new(ustack_buttom, ustack_top, Box::new(SwapMemoryHandler::new(SWAP_TABLE.clone(), MemoryAttr::default().user())), "user_stack"));
         //trace!("{:#x?}", memory_set);
 
         let entry_addr = elf.header.pt2.entry_point() as usize;
@@ -197,7 +197,7 @@ impl ContextImpl {
 
 impl Drop for ContextImpl{
     fn drop(&mut self){
-        /*
+        
         info!("come in to drop for ContextImpl");
         //set the user Memory pages in the memory set unswappable
         let Self {ref mut arch, ref mut memory_set, ref mut kstack, ..} = self;
@@ -208,12 +208,12 @@ impl Drop for ContextImpl{
             for page in Page::range_of(area.get_start_addr(), area.get_end_addr()) {
                 let addr = page.start_address();
                 unsafe {
-                    active_table_swap().remove_from_swappable(active_table().get_data_mut(), pt, addr, || alloc_frame().expect("alloc frame failed"));
+                    swap_table().remove_from_swappable(active_table().get_data_mut(), pt, addr, || alloc_frame().expect("alloc frame failed"));
                 }
             }
         }
         debug!("Finishing setting pages unswappable");
-        */
+        
     }
 }
 
@@ -269,7 +269,7 @@ fn memory_set_from<'a>(elf: &'a ElfFile<'a>) -> MemorySet {
             ProgramHeader::Ph32(ph) => (ph.virtual_addr as usize, ph.mem_size as usize, ph.flags),
             ProgramHeader::Ph64(ph) => (ph.virtual_addr as usize, ph.mem_size as usize, ph.flags),
         };
-        set.push(MemoryArea::new(virt_addr, virt_addr + mem_size, memory_attr_from(flags), Box::new(NormalMemoryHandler::new(memory_attr_from(flags))), ""));
+        set.push(MemoryArea::new(virt_addr, virt_addr + mem_size, Box::new(SwapMemoryHandler::new(SWAP_TABLE.clone(), memory_attr_from(flags))), ""));
 
     }
     set
@@ -289,7 +289,7 @@ fn memory_attr_from(elf_flags: Flags) -> MemoryAttr {
 *   map the memory area in the memory_set swappalbe, specially for the user process
 */
 pub fn memory_set_map_swappable(memory_set: &mut MemorySet){
-    /*
+    
     info!("COME INTO memory set map swappable!");
     let pt = unsafe {
         memory_set.get_page_table_mut() as *mut InactivePageTable0
@@ -297,10 +297,10 @@ pub fn memory_set_map_swappable(memory_set: &mut MemorySet){
     for area in memory_set.iter(){
         for page in Page::range_of(area.get_start_addr(), area.get_end_addr()) {
             let addr = page.start_address();
-            unsafe { active_table_swap().set_swappable(active_table().get_data_mut(), pt, addr); }
+            unsafe { swap_table().set_swappable(active_table().get_data_mut(), pt, addr); }
         }
     }
-    */
+    
     info!("Finishing setting pages swappable");
 }
 

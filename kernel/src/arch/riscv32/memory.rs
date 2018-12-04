@@ -66,11 +66,11 @@ fn init_frame_allocator() {
 fn remap_the_kernel() {
     let mut ms = MemorySet::new_bare();
     #[cfg(feature = "no_bbl")]
-    ms.push(MemoryArea::new_identity(0x10000000, 0x10000008, MemoryAttr::default(), Box::new(SimpleMemoryHandler::new(0x10000000, 0x10000000, MemoryAttr::default())), "serial"));
-    ms.push(MemoryArea::new_identity(stext as usize, etext as usize, MemoryAttr::default().execute().readonly(), Box::new(SimpleMemoryHandler::new(stext as usize, stext as usize, MemoryAttr::default().execute().readonly())), "text"));
-    ms.push(MemoryArea::new_identity(sdata as usize, edata as usize, MemoryAttr::default(), Box::new(SimpleMemoryHandler::new(sdata as usize, sdata as usize, MemoryAttr::default())), "data"));
-    ms.push(MemoryArea::new_identity(srodata as usize, erodata as usize, MemoryAttr::default().readonly(), Box::new(SimpleMemoryHandler::new(srodata as usize, srodata as usize, MemoryAttr::default().readonly())), "rodata"));
-    ms.push(MemoryArea::new_identity(sbss as usize, ebss as usize, MemoryAttr::default(), Box::new(SimpleMemoryHandler::new(sbss as usize, sbss as usize, MemoryAttr::default())), "bss"));
+    ms.push(MemoryArea::new(0x10000000, 0x10000008, Box::new(SimpleMemoryHandler::new(0x10000000, 0x10000000, MemoryAttr::default())), "serial"));
+    ms.push(MemoryArea::new(stext as usize, etext as usize, Box::new(SimpleMemoryHandler::new(stext as usize, stext as usize, MemoryAttr::default().execute().readonly())), "text"));
+    ms.push(MemoryArea::new(sdata as usize, edata as usize, Box::new(SimpleMemoryHandler::new(sdata as usize, sdata as usize, MemoryAttr::default())), "data"));
+    ms.push(MemoryArea::new(srodata as usize, erodata as usize, Box::new(SimpleMemoryHandler::new(srodata as usize, srodata as usize, MemoryAttr::default().readonly())), "rodata"));
+    ms.push(MemoryArea::new(sbss as usize, ebss as usize, Box::new(SimpleMemoryHandler::new(sbss as usize, sbss as usize, MemoryAttr::default())), "bss"));
     unsafe { ms.activate(); }
     unsafe { SATP = ms.token(); }
     mem::forget(ms);
