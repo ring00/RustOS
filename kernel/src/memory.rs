@@ -5,12 +5,14 @@ use spin;
 use super::HEAP_ALLOCATOR;
 use ucore_memory::{*, paging::PageTable};
 use ucore_memory::cow::CowExt;
-pub use ucore_memory::memory_set::{MemoryArea, MemoryAttr, MemorySet as MemorySet_, InactivePageTable};
+pub use ucore_memory::memory_set::{MemoryArea, MemoryAttr, MemorySet as MemorySet_, InactivePageTable, MemoryHandler};
 use ucore_memory::swap::*;
 //use process::{processor, PROCESSOR};
 use process::{process};
 use sync::{SpinNoIrqLock, SpinNoIrq, MutexGuard};
 use alloc::collections::VecDeque;
+use alloc::sync::Arc;
+use alloc::boxed::Box;
 
 pub type MemorySet = MemorySet_<InactivePageTable0>;
 
@@ -166,7 +168,7 @@ pub fn page_fault_handler(addr: usize) -> bool {
 
             let pt = process().get_memory_set_mut().get_page_table_mut();
             info!("pt got");
-            if active_table_swap().page_fault_handler(active_table().get_data_mut(), pt as *mut InactivePageTable0, addr, true, || alloc_frame().expect("fail to alloc frame")){
+            if active_table_swap().page_fault_handler(active_table().get_data_mut(), pt as *mut InactivePageTable0, addr, false, || alloc_frame().expect("fail to alloc frame")){
                 return true;
             }
         },
@@ -198,3 +200,137 @@ pub fn init_heap() {
 //        test_with(&mut active_table());
 //    }
 //}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct SimpleMemoryHandler{
+    start_addr: VirtAddr,
+    phys_start_addr: PhysAddr,
+    flags: MemoryAttr,
+}
+
+impl MemoryHandler for SimpleMemoryHandler{
+    //type Active = ActivePageTable;
+    //type Inactvie = InactivePageTable0;
+    fn box_clone(&self) -> Box<MemoryHandler>{
+        Box::new((*self).clone())
+    }
+
+    fn map(&self, pt: &mut PageTable, addr: VirtAddr){
+        let target = addr - self.start_addr + self.phys_start_addr;
+        self.flags.apply(pt.map(addr, target));
+    }
+
+    fn unmap(&self, pt: &mut PageTable, addr: VirtAddr){
+        pt.unmap(addr);
+    }
+    /*
+    fn page_fault_handler(&mut self, page_table: &mut Self::Active, pt: usize, addr: VirtAddr) -> bool{
+        false
+    }
+    */
+}
+
+impl SimpleMemoryHandler{
+    pub fn new(start_addr: VirtAddr, phys_start_addr: PhysAddr, flags: MemoryAttr) -> Self {
+        SimpleMemoryHandler{
+            start_addr,
+            phys_start_addr,
+            flags,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct NormalMemoryHandler{
+    flags: MemoryAttr,
+}
+
+
+impl MemoryHandler for NormalMemoryHandler{
+    //type Active = ActivePageTable;
+    //type Inactvie = InactivePageTable0;
+    fn box_clone(&self) -> Box<MemoryHandler>{
+        Box::new((*self).clone())
+    }
+
+    fn map(&self, pt: &mut PageTable, addr: VirtAddr){
+        let target = InactivePageTable0::alloc_frame().expect("failed to allocate frame");
+        self.flags.apply(pt.map(addr, target));
+    }
+
+    fn unmap(&self, pt: &mut PageTable, addr: VirtAddr){
+        let target = pt.get_entry(addr).expect("fail to get entry").target();
+        InactivePageTable0::dealloc_frame(target);
+        pt.unmap(addr);
+    }
+    /*
+    fn page_fault_handler(&mut self, page_table: &mut Self::Active, pt: usize, addr: VirtAddr) -> bool{
+        false
+    }
+    */
+}
+
+impl NormalMemoryHandler{
+    pub fn new(flags: MemoryAttr) -> Self {
+        NormalMemoryHandler{
+            flags,
+        }
+    }
+}
+/*
+pub struct SwapMemoryHandler<M: SwapManager, S: Swapper>{
+    swap_ext: Arc<spin::Mutex<SwapExt<M, S>>>,
+    flags: MemoryAttr,
+}
+
+impl<M: SwapManager, S: Swapper> MemoryHandler for SwapMemoryHandler<M, S>{
+    //type Active = ActivePageTable;
+    //type Inactvie = InactivePageTable0;
+    fn box_clone(&self) -> Box<MemoryHandler>{
+        Box::new((*self).clone())
+    }
+
+    fn map(&self, pt: &mut PageTable, addr: VirtAddr){
+        {
+            let entry = pt.map(addr,0);
+            self.flags.apply(entry);
+        }
+        let entry = pt.get_entry(addr).expect("fail to get entry");
+        entry.set_present(false);
+        entry.update();
+    }
+
+    fn unmap(&self, pt: &mut PageTable, addr: VirtAddr){
+        if pt.get_entry(addr).expect("fail to get entry").present(){
+            let target = pt.get_entry(addr).expect("fail to get entry").target();
+            InactivePageTable0::dealloc_frame(target);
+        }
+        else{
+            // set valid for pt.unmap function
+            pt.get_entry(addr).expect("fail to get entry").set_present(true);
+        }
+        pt.unmap(addr);
+    }
+    /*
+    fn page_fault_handler<T: InactivePageTable>(&mut self, page_table: &mut T::Active, pt: *mut T, addr: VirtAddr, alloc_frame: impl FnOnce() -> PhysAddr) -> bool{
+        self.swap_ext.lock().page_fault_handler(page_table, pt, addr, false, alloc_frame)
+    }
+    */
+
+}
+
+impl<M: SwapManager, S: Swapper> SwapMemoryHandler<M, S>{
+    pub fn new(swap_ext: Arc<spin::Mutex<SwapExt<M, S>>>, flags: MemoryAttr){
+        SwapMemoryHandler::<M, S>{
+            swap_ext,
+            flags,
+        }
+    }
+}
+
+impl<M: SwapManager, S: Swapper> Clone for SwapMemoryHandler<M, S>{
+    fn clone(&self) -> Self{
+        SwapMemoryHandler::<M, S>::new(self.swap_ext.clone(), self.flags.clone())
+    }
+}
+*/
