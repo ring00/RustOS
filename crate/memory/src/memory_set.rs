@@ -356,14 +356,15 @@ impl<T: InactivePageTable> Clone for MemorySet<T> {
     fn clone(&self) -> Self {
         let mut page_table = T::new();
         let pt_ptr = (&mut page_table) as *mut T as usize;
+        let mut newareas = self.areas.clone();
         page_table.edit(|pt| {
-            for area in self.areas.iter() {
+            for area in newareas.iter() {
                 area.map(pt, pt_ptr);
             }
         });
         info!("finish map in clone!");
         MemorySet {
-            areas: self.areas.clone(),
+            areas: newareas,
             page_table,
         }
     }

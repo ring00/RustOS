@@ -10,7 +10,7 @@ use ucore_memory::swap::{fifo, mock_swapper, SwapExt as SwapExt_};
 //use process::{processor, PROCESSOR};
 use process::{process};
 use sync::{SpinNoIrqLock, SpinNoIrq, MutexGuard};
-use alloc::collections::VecDeque;
+use alloc::vec::Vec;
 use alloc::sync::Arc;
 use alloc::boxed::Box;
 
@@ -140,8 +140,9 @@ impl Drop for KernelStack {
 pub fn page_fault_handler(addr: usize) -> bool {
     info!("start handling swap in/out page fault");
     //unsafe { ACTIVE_TABLE_SWAP.force_unlock(); }
-    /*
+    
     info!("active page table token in pg fault is {:x?}, virtaddr is {:x?}", ActivePageTable::token(), addr);
+    /*
     let mmset_record = memory_set_record();
     let id = mmset_record.iter()
             .position(|x| unsafe{(*(x.clone() as *mut MemorySet)).get_page_table_mut().token() == ActivePageTable::token()});
@@ -301,7 +302,8 @@ impl NormalMemoryHandler{
 pub struct SwapMemoryHandler{
     swap_ext: Arc<spin::Mutex<SwapExtType>>,
     flags: MemoryAttr,
-    delay_alloc: bool,
+    //delay_alloc: bool,
+    delay_alloc: Vec<VirtAddr>,
     //page_table: *mut InactivePageTable0,
 }
 
@@ -313,7 +315,9 @@ impl MemoryHandler for SwapMemoryHandler{
     }
 
     fn map(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
-        if self.delay_alloc{
+        let id = self.delay_alloc.iter().position(|x|*x == addr);
+        if id.is_some(){
+            info!("delay allocated addr: {:x?}", addr);
             {
                 let entry = pt.map(addr,0);
                 self.flags.apply(entry);
@@ -323,11 +327,10 @@ impl MemoryHandler for SwapMemoryHandler{
             entry.update();
         }
         else{
+            info!("no delay allocated addr: {:x?}", addr);
             let target = InactivePageTable0::alloc_frame().expect("failed to allocate frame");
             self.flags.apply(pt.map(addr, target));
-            info!("IN MAP:try to get swap_ext.lock");
             unsafe{self.swap_ext.lock().set_swappable(pt, inpt as *mut InactivePageTable0, addr);}
-            info!("IN MAP:release swap_ext lock Sucessfullay!");
         }
     }
 
@@ -351,7 +354,7 @@ impl MemoryHandler for SwapMemoryHandler{
 }
 
 impl SwapMemoryHandler{
-    pub fn new(swap_ext: Arc<spin::Mutex<SwapExtType>>, flags: MemoryAttr, delay_alloc: bool) -> Self {
+    pub fn new(swap_ext: Arc<spin::Mutex<SwapExtType>>, flags: MemoryAttr, delay_alloc: Vec<VirtAddr>) -> Self {
         SwapMemoryHandler{
             swap_ext,
             flags,
@@ -363,6 +366,7 @@ impl SwapMemoryHandler{
 
 impl Clone for SwapMemoryHandler{
     fn clone(&self) -> Self{
-        SwapMemoryHandler::new(self.swap_ext.clone(), self.flags.clone(), self.delay_alloc.clone())
+        // when we fork a new process, all the page need to be map with physical phrame immediately
+        SwapMemoryHandler::new(self.swap_ext.clone(), self.flags.clone(), Vec::<VirtAddr>::new())
     }
 }

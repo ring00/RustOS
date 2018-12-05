@@ -4,7 +4,7 @@ use xmas_elf::{ElfFile, header, program::{Flags, ProgramHeader, Type}};
 use core::fmt::{Debug, Error, Formatter};
 use ucore_process::Context;
 use alloc::{boxed::Box, collections::BTreeMap, vec::Vec, sync::Arc, string::String};
-use ucore_memory::{Page};
+use ucore_memory::{Page, VirtAddr};
 use ::memory::{InactivePageTable0};
 use ucore_memory::memory_set::*;
 use simple_filesystem::file::File;
@@ -89,8 +89,18 @@ impl ContextImpl {
         //let id = memory_set_record().iter()
         //    .position(|x| unsafe { info!("current memory set record include {:x?}, {:x?}", x, (*(x.clone() as *mut MemorySet)).get_page_table_mut().token()); false });
 
-
-        memory_set.push(MemoryArea::new(ustack_buttom, ustack_top, Box::new(SwapMemoryHandler::new(SWAP_TABLE.clone(), MemoryAttr::default().user(), false)), "user_stack"));
+        // add the pages for memory delay allocated
+        let mut delay_vec = Vec::<VirtAddr>::new();
+        //delay_vec.push(ustack_top & & 0xfffff000);
+        for page in Page::range_of(ustack_buttom, ustack_top) {
+            let addr = page.start_address();
+            if addr != Page::of_addr(ustack_top - 1).start_address(){
+                //info!("delay_vec addr {:x?}", addr);
+                delay_vec.push(addr);
+            }
+        }
+        //info!("ustack_top is {:x?} start_address is {:x?}", ustack_top, Page::of_addr(ustack_top - 1).start_address());
+        memory_set.push(MemoryArea::new(ustack_buttom, ustack_top, Box::new(SwapMemoryHandler::new(SWAP_TABLE.clone(), MemoryAttr::default().user(), delay_vec)), "user_stack"));
         //trace!("{:#x?}", memory_set);
 
         let entry_addr = elf.header.pt2.entry_point() as usize;
@@ -279,7 +289,7 @@ fn memory_set_from<'a>(elf: &'a ElfFile<'a>) -> Box<MemorySet> {
             ProgramHeader::Ph64(ph) => (ph.virtual_addr as usize, ph.mem_size as usize, ph.flags),
         };
         info!("virtaddr: {:x?}, memory size: {:x?}, flags: {}", virt_addr, mem_size, flags);
-        set.push(MemoryArea::new(virt_addr, virt_addr + mem_size, Box::new(SwapMemoryHandler::new(SWAP_TABLE.clone(), memory_attr_from(flags), false)), ""));
+        set.push(MemoryArea::new(virt_addr, virt_addr + mem_size, Box::new(SwapMemoryHandler::new(SWAP_TABLE.clone(), memory_attr_from(flags), Vec::<VirtAddr>::new())), ""));
 
     }
     set
