@@ -1,6 +1,6 @@
 use super::riscv::register::*;
 pub use self::context::*;
-use ::memory::{InactivePageTable0, memory_set_record};
+use ::memory::{InactivePageTable0};
 use memory::MemorySet;
 
 #[path = "context.rs"]

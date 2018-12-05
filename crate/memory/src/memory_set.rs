@@ -68,7 +68,7 @@ pub trait InactivePageTable {
 pub trait MemoryHandler{
     fn box_clone(&self) -> Box<MemoryHandler>;
 
-    fn map(&self, pt: &mut PageTable, addr: VirtAddr);
+    fn map(&self, pt: &mut PageTable, intp: usize, addr: VirtAddr);
 
     fn unmap(&self, pt: &mut PageTable, addr:VirtAddr);
 
@@ -161,39 +161,10 @@ impl MemoryArea {
     **  @param  pt: &mut T::Active   the page table to use
     **  @retval none
     */
-    fn map(&self, pt: &mut PageTable) {
-        /*
-        match self.phys_start_addr {
-            Some(phys_start) => {
-                for page in Page::range_of(self.start_addr, self.end_addr) {
-                    let addr = page.start_address();
-                    let target = page.start_address() - self.start_addr + phys_start;
-                    self.flags.apply(pt.map(addr, target));
-                }
-            }
-            None => {
-                info!("map delayed!");
-                for page in Page::range_of(self.start_addr, self.end_addr) {
-                    let addr = page.start_address();
-                    //let target = T::alloc_frame().expect("failed to allocate frame");
-                    //self.flags.apply(pt.map(addr, target));
-                    // for frame delayed allocation
-                    {
-                        let entry = pt.map(addr,0);
-                        self.flags.apply(entry);
-                    }
-                    let entry = pt.get_entry(addr).expect("fail to get entry");
-                    entry.set_present(false);
-                    entry.update();
-
-                }
-                info!("finish map delayed!");
-            }
-        };
-        */
+    fn map(&self, pt: &mut PageTable, inpt: usize) {
         for page in Page::range_of(self.start_addr, self.end_addr) {
             let addr = page.start_address();
-            self.memory_handler.map(pt, addr);
+            self.memory_handler.map(pt, inpt, addr);
         }
     }
     /*
@@ -202,22 +173,6 @@ impl MemoryArea {
     **  @retval none
     */
     fn unmap(&self, pt: &mut PageTable) {
-        /*
-        for page in Page::range_of(self.start_addr, self.end_addr) {
-            let addr = page.start_address();
-            if self.phys_start_addr.is_none() {
-                if pt.get_entry(addr).expect("fail to get entry").present(){
-                    let target = pt.get_entry(addr).expect("fail to get entry").target();
-                    T::dealloc_frame(target);
-                }
-                else{
-                    // set valid for pt.unmap function
-                    pt.get_entry(addr).expect("fail to get entry").set_present(true);
-                }
-            }
-            pt.unmap(addr);
-        }
-        */
         for page in Page::range_of(self.start_addr, self.end_addr) {
             let addr = page.start_address();
             self.memory_handler.unmap(pt, addr);
@@ -336,7 +291,8 @@ impl<T: InactivePageTable> MemorySet<T> {
         assert!(self.areas.iter()
                     .find(|other| area.is_overlap_with(other))
                     .is_none(), "memory area overlap");
-        self.page_table.edit(|pt| area.map(pt));
+        let pt_ptr = (&mut self.page_table) as *mut T as usize;
+        self.page_table.edit(|pt| area.map(pt, pt_ptr));
         self.areas.push(area);
     }
     /*
@@ -399,9 +355,10 @@ impl<T: InactivePageTable> MemorySet<T> {
 impl<T: InactivePageTable> Clone for MemorySet<T> {
     fn clone(&self) -> Self {
         let mut page_table = T::new();
+        let pt_ptr = (&mut page_table) as *mut T as usize;
         page_table.edit(|pt| {
             for area in self.areas.iter() {
-                area.map(pt);
+                area.map(pt, pt_ptr);
             }
         });
         info!("finish map in clone!");

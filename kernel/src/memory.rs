@@ -30,6 +30,7 @@ lazy_static! {
 }
 // record the user memory set for pagefault function (swap in/out and frame delayed allocate) temporarily when page fault in new_user() or fork() function
 // after the process is set we can use use processor() to get the inactive page table
+/*
 lazy_static! {
     pub static ref MEMORY_SET_RECORD: SpinNoIrqLock<VecDeque<usize>> = SpinNoIrqLock::new(VecDeque::default());
 }
@@ -37,6 +38,7 @@ lazy_static! {
 pub fn memory_set_record() -> MutexGuard<'static, VecDeque<usize>, SpinNoIrq> {
     MEMORY_SET_RECORD.lock()
 }
+*/
 
 /*
 lazy_static! {
@@ -138,7 +140,7 @@ impl Drop for KernelStack {
 pub fn page_fault_handler(addr: usize) -> bool {
     info!("start handling swap in/out page fault");
     //unsafe { ACTIVE_TABLE_SWAP.force_unlock(); }
-
+    /*
     info!("active page table token in pg fault is {:x?}, virtaddr is {:x?}", ActivePageTable::token(), addr);
     let mmset_record = memory_set_record();
     let id = mmset_record.iter()
@@ -179,6 +181,18 @@ pub fn page_fault_handler(addr: usize) -> bool {
             }
         },
     };
+    */
+    info!("get pt from processor()");
+    if process().get_memory_set_mut().find_area(addr).is_none(){
+        return false;
+    }
+
+    let pt = process().get_memory_set_mut().get_page_table_mut();
+    info!("pt got");
+    let mut temp_table = active_table();
+    if swap_table().page_fault_handler(temp_table.get_data_mut(), pt as *mut InactivePageTable0, addr, true, || alloc_frame().expect("fail to alloc frame")){
+        return true;
+    }
     //////////////////////////////////////////////////////////////////////////////
 
 

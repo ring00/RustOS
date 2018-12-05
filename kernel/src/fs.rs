@@ -7,7 +7,7 @@ use sync::SpinNoIrqLock as Mutex;
 use core::any::Any;
 use core::slice;
 
-use ::memory::{InactivePageTable0, memory_set_record};
+use ::memory::{InactivePageTable0};
 use memory::MemorySet;
 //use process::context::memory_set_map_swappable;
 

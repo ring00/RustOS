@@ -109,7 +109,7 @@ impl<M: SwapManager, S: Swapper> SwapExt<M, S> {
     **  @param pt: *mut T2           the raw pointer for the target page's inactive page table
     **  @param addr: VirtAddr        the target page's virtual address
     */
-    pub unsafe fn set_swappable<T: PageTable, T2: InactivePageTable>(&mut self, page_table: &mut T, pt: *mut T2, addr: VirtAddr){
+    pub unsafe fn set_swappable<T2: InactivePageTable>(&mut self, page_table: &mut PageTable, pt: *mut T2, addr: VirtAddr){
         let Self {ref mut swap_manager, ref mut swapper} = self;
         let targetpt = &mut *(pt);
         let pttoken = {

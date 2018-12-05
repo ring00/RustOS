@@ -5,7 +5,7 @@ use core::fmt::{Debug, Error, Formatter};
 use ucore_process::Context;
 use alloc::{boxed::Box, collections::BTreeMap, vec::Vec, sync::Arc, string::String};
 use ucore_memory::{Page};
-use ::memory::{InactivePageTable0, memory_set_record};
+use ::memory::{InactivePageTable0};
 use ucore_memory::memory_set::*;
 use simple_filesystem::file::File;
 use spin::Mutex;
