@@ -9,7 +9,7 @@ use core::slice;
 
 use ::memory::{InactivePageTable0, memory_set_record};
 use memory::MemorySet;
-use process::context::memory_set_map_swappable;
+//use process::context::memory_set_map_swappable;
 
 // Hard link user program
 #[cfg(target_arch = "riscv32")]

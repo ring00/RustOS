@@ -94,7 +94,10 @@ pub fn alloc_frame() -> Option<usize> {
     let ret = FRAME_ALLOCATOR.lock().alloc().map(|id| id * PAGE_SIZE + MEMORY_OFFSET);
     trace!("Allocate frame: {:x?}", ret);
     //do we need : unsafe { ACTIVE_TABLE_SWAP.force_unlock(); } ???
-    Some(ret.unwrap_or_else(|| swap_table().swap_out_any::<ActivePageTable, InactivePageTable0>(active_table().get_data_mut()).ok().expect("fail to swap out page")))
+    Some(ret.unwrap_or_else(|| {
+        let mut temp_table = active_table();
+        swap_table().swap_out_any::<ActivePageTable, InactivePageTable0>(temp_table.get_data_mut()).ok().expect("fail to swap out page")
+    }))
 }
 
 pub fn dealloc_frame(target: usize) {
@@ -136,13 +139,14 @@ pub fn page_fault_handler(addr: usize) -> bool {
     info!("start handling swap in/out page fault");
     //unsafe { ACTIVE_TABLE_SWAP.force_unlock(); }
 
-    info!("active page table token in pg fault is {:x?}", ActivePageTable::token());
+    info!("active page table token in pg fault is {:x?}, virtaddr is {:x?}", ActivePageTable::token(), addr);
     let mmset_record = memory_set_record();
     let id = mmset_record.iter()
             .position(|x| unsafe{(*(x.clone() as *mut MemorySet)).get_page_table_mut().token() == ActivePageTable::token()});
     /*LAB3 EXERCISE 1: YOUR STUDENT NUMBER
     * handle the frame deallocated
     */
+    assert!(!id.is_none());
     match id {
         Some(targetid) => {
             info!("get id from memroy set recorder.");
@@ -169,7 +173,8 @@ pub fn page_fault_handler(addr: usize) -> bool {
 
             let pt = process().get_memory_set_mut().get_page_table_mut();
             info!("pt got");
-            if swap_table().page_fault_handler(active_table().get_data_mut(), pt as *mut InactivePageTable0, addr, true, || alloc_frame().expect("fail to alloc frame")){
+            let mut temp_table = active_table();
+            if swap_table().page_fault_handler(temp_table.get_data_mut(), pt as *mut InactivePageTable0, addr, true, || alloc_frame().expect("fail to alloc frame")){
                 return true;
             }
         },
@@ -216,7 +221,7 @@ impl MemoryHandler for SimpleMemoryHandler{
         Box::new((*self).clone())
     }
 
-    fn map(&self, pt: &mut PageTable, addr: VirtAddr){
+    fn map(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
         let target = addr - self.start_addr + self.phys_start_addr;
         self.flags.apply(pt.map(addr, target));
     }
@@ -254,7 +259,7 @@ impl MemoryHandler for NormalMemoryHandler{
         Box::new((*self).clone())
     }
 
-    fn map(&self, pt: &mut PageTable, addr: VirtAddr){
+    fn map(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
         let target = InactivePageTable0::alloc_frame().expect("failed to allocate frame");
         self.flags.apply(pt.map(addr, target));
     }
@@ -282,6 +287,8 @@ impl NormalMemoryHandler{
 pub struct SwapMemoryHandler{
     swap_ext: Arc<spin::Mutex<SwapExtType>>,
     flags: MemoryAttr,
+    delay_alloc: bool,
+    //page_table: *mut InactivePageTable0,
 }
 
 impl MemoryHandler for SwapMemoryHandler{
@@ -291,14 +298,23 @@ impl MemoryHandler for SwapMemoryHandler{
         Box::new((*self).clone())
     }
 
-    fn map(&self, pt: &mut PageTable, addr: VirtAddr){
-        {
-            let entry = pt.map(addr,0);
-            self.flags.apply(entry);
+    fn map(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
+        if self.delay_alloc{
+            {
+                let entry = pt.map(addr,0);
+                self.flags.apply(entry);
+            }
+            let entry = pt.get_entry(addr).expect("fail to get entry");
+            entry.set_present(false);
+            entry.update();
         }
-        let entry = pt.get_entry(addr).expect("fail to get entry");
-        entry.set_present(false);
-        entry.update();
+        else{
+            let target = InactivePageTable0::alloc_frame().expect("failed to allocate frame");
+            self.flags.apply(pt.map(addr, target));
+            info!("IN MAP:try to get swap_ext.lock");
+            unsafe{self.swap_ext.lock().set_swappable(pt, inpt as *mut InactivePageTable0, addr);}
+            info!("IN MAP:release swap_ext lock Sucessfullay!");
+        }
     }
 
     fn unmap(&self, pt: &mut PageTable, addr: VirtAddr){
@@ -321,10 +337,11 @@ impl MemoryHandler for SwapMemoryHandler{
 }
 
 impl SwapMemoryHandler{
-    pub fn new(swap_ext: Arc<spin::Mutex<SwapExtType>>, flags: MemoryAttr) -> Self {
+    pub fn new(swap_ext: Arc<spin::Mutex<SwapExtType>>, flags: MemoryAttr, delay_alloc: bool) -> Self {
         SwapMemoryHandler{
             swap_ext,
             flags,
+            delay_alloc,
         }
     }
 }
@@ -332,6 +349,6 @@ impl SwapMemoryHandler{
 
 impl Clone for SwapMemoryHandler{
     fn clone(&self) -> Self{
-        SwapMemoryHandler::new(self.swap_ext.clone(), self.flags.clone())
+        SwapMemoryHandler::new(self.swap_ext.clone(), self.flags.clone(), self.delay_alloc.clone())
     }
 }
