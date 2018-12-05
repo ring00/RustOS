@@ -27,8 +27,8 @@ impl SwapManager for FifoSwapManager {
         
     }
 
-    fn pop<T, S>(&mut self, _: &mut T, _: &mut S) -> Option<Frame>
-        where T: PageTable, S: Swapper
+    fn pop<S>(&mut self, _: &mut PageTable, _: &mut S) -> Option<Frame>
+        where S: Swapper
     {
         self.deque.pop_front()
     }

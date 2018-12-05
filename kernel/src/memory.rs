@@ -15,7 +15,7 @@ use alloc::sync::Arc;
 use alloc::boxed::Box;
 
 pub type MemorySet = MemorySet_<InactivePageTable0>;
-pub type SwapExtType = SwapExt_<fifo::FifoSwapManager, mock_swapper::MockSwapper>;
+pub type SwapExtType = SwapExt_<fifo::FifoSwapManager, mock_swapper::MockSwapper, InactivePageTable0>;
 
 // x86_64 support up to 256M memory
 #[cfg(target_arch = "x86_64")]
@@ -98,7 +98,7 @@ pub fn alloc_frame() -> Option<usize> {
     //do we need : unsafe { ACTIVE_TABLE_SWAP.force_unlock(); } ???
     Some(ret.unwrap_or_else(|| {
         let mut temp_table = active_table();
-        swap_table().swap_out_any::<ActivePageTable, InactivePageTable0>(temp_table.get_data_mut()).ok().expect("fail to swap out page")
+        swap_table().swap_out_any(temp_table.get_data_mut()).ok().expect("fail to swap out page")
     }))
 }
 
