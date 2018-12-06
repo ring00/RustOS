@@ -186,7 +186,8 @@ pub fn page_fault_handler(addr: usize) -> bool {
         },
     };
     */
-    info!("get pt from processor()");
+    info!("get pt from process()");
+    /*
     if process().get_memory_set_mut().find_area(addr).is_none(){
         return false;
     }
@@ -197,6 +198,23 @@ pub fn page_fault_handler(addr: usize) -> bool {
     if swap_table().page_fault_handler(temp_table.get_data_mut(), pt as *mut InactivePageTable0, addr, true, || alloc_frame().expect("fail to alloc frame")){
         return true;
     }
+    */
+    let target_area = process().get_memory_set_mut().find_area(addr);
+    match target_area{
+        Some(area) => {
+            let pt = process().get_memory_set_mut().get_page_table_mut();
+            let mut temp_table = active_table();
+            if area.page_fault_handler(temp_table.get_data_mut(), pt as *mut InactivePageTable0 as usize, addr) {
+                return true;
+            }
+            //if swap_table().page_fault_handler(temp_table.get_data_mut(), pt as *mut InactivePageTable0, addr, true, || alloc_frame().expect("fail to alloc frame")){
+            //    return true;
+            //}
+        },
+        None => {
+            return false;
+        },
+    };
     //////////////////////////////////////////////////////////////////////////////
 
 
@@ -247,11 +265,11 @@ impl MemoryHandler for SimpleMemoryHandler{
     fn unmap(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
         pt.unmap(addr);
     }
-    /*
-    fn page_fault_handler(&mut self, page_table: &mut Self::Active, pt: usize, addr: VirtAddr) -> bool{
+    
+    fn page_fault_handler(&self, page_table: &mut PageTable, inpt: usize, addr: VirtAddr) -> bool{
         false
     }
-    */
+    
 }
 
 impl SimpleMemoryHandler{
@@ -287,11 +305,10 @@ impl MemoryHandler for NormalMemoryHandler{
         InactivePageTable0::dealloc_frame(target);
         pt.unmap(addr);
     }
-    /*
-    fn page_fault_handler(&mut self, page_table: &mut Self::Active, pt: usize, addr: VirtAddr) -> bool{
+    
+    fn page_fault_handler(&self, page_table: &mut PageTable, inpt: usize, addr: VirtAddr) -> bool {
         false
     }
-    */
 }
 
 impl NormalMemoryHandler{
@@ -351,11 +368,51 @@ impl MemoryHandler for SwapMemoryHandler{
         }
         pt.unmap(addr);
     }
-    /*
-    fn page_fault_handler<T: InactivePageTable>(&mut self, page_table: &mut T::Active, pt: *mut T, addr: VirtAddr, alloc_frame: impl FnOnce() -> PhysAddr) -> bool{
-        self.swap_ext.lock().page_fault_handler(page_table, pt, addr, false, alloc_frame)
+    
+    fn page_fault_handler(&self, page_table: &mut PageTable, inpt: usize, addr: VirtAddr) -> bool {
+        //self.swap_ext.lock().page_fault_handler(page_table, inpt as *mut InactivePageTable0, addr, true, || InactivePageTable0::alloc_frame().expect("alloc frame failed"))
+        // handle page delayed allocating
+        
+        let id = self.delay_alloc.iter().position(|x|*x == addr);
+        if id.is_some(){
+            info!("try handling delayed frame allocator");
+            let need_alloc ={
+                let entry = page_table.get_entry(addr).expect("fail to get entry");
+                //info!("got entry!");
+                !entry.present() && !entry.swapped()
+            };
+            info!("need_alloc got");
+            if need_alloc {
+                info!("need_alloc!");
+                let frame = InactivePageTable0::alloc_frame().expect("alloc frame failed");
+                {
+                    let entry = page_table.get_entry(addr).expect("fail to get entry");
+                    entry.set_target(frame);
+                    //let new_entry = self.page_table.map(addr, frame);
+                    entry.set_present(true);
+                    entry.update();
+                }
+                unsafe{self.swap_ext.lock().set_swappable(page_table, inpt as *mut InactivePageTable0, Page::of_addr(addr).start_address())};
+                //area.get_flags().apply(new_entry); this instruction may be used when hide attr is used
+                info!("allocated successfully");
+                return true;
+            }
+            info!("not need alloc!");
+        }
+        // handle the swap out page fault            
+        // now we didn't attach the cow so the present will be false when swapped(), to enable the cow some changes will be needed
+        match page_table.get_entry(addr) {
+            // infact the get_entry(addr) should not be None here
+            None => return false,
+            Some(entry) => if !(entry.swapped() && !entry.present())  { return false; },
+        }
+        // Allocate a frame, if failed, swap out a page
+        let frame = InactivePageTable0::alloc_frame().expect("alloc frame failed");
+        self.swap_ext.lock().swap_in(page_table, inpt as *mut InactivePageTable0, addr, frame).ok().unwrap();
+        true
+        
     }
-    */
+    
 
 }
 

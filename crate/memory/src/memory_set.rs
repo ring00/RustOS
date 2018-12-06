@@ -72,7 +72,7 @@ pub trait MemoryHandler{
 
     fn unmap(&self, pt: &mut PageTable, inpt: usize, addr:VirtAddr);
 
-    //fn page_fault_handler(&mut self, page_table: &mut PageTable, pt: usize, addr: VirtAddr) -> bool;
+    fn page_fault_handler(&self, page_table: &mut PageTable, inpt: usize, addr: VirtAddr) -> bool;
 }
 
 impl Clone for Box<MemoryHandler> {
@@ -191,6 +191,10 @@ impl MemoryArea {
         &self.flags
     }
     */
+
+    pub fn page_fault_handler(&self, page_table: &mut PageTable, inpt: usize, addr: VirtAddr) -> bool {
+        self.memory_handler.page_fault_handler(page_table, inpt, addr)
+    }
 }
 
 /// The attributes of the memory

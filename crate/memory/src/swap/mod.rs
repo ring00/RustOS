@@ -85,7 +85,6 @@ pub trait Swapper {
 
 /// Wrapper for page table, supporting swap functions
 pub struct SwapExt<M: SwapManager, S: Swapper, T: InactivePageTable> {
-    //page_table: T,
     swap_manager: M,
     swapper: S,
     mark: PhantomData<T>,
@@ -247,7 +246,7 @@ impl<M: SwapManager, S: Swapper, T:InactivePageTable> SwapExt<M, S, T> {
     **  @retval Result<()), SwapError>
     **                               the execute result, and the error if failed
     */
-    fn swap_in(&mut self, page_table: &mut PageTable, pt: *mut T, addr: VirtAddr, target: PhysAddr) -> Result<(), SwapError> {
+    pub fn swap_in(&mut self, page_table: &mut PageTable, pt: *mut T, addr: VirtAddr, target: PhysAddr) -> Result<(), SwapError> {
         info!("come in to swap in");
         let entry = page_table.get_entry(addr)
             .ok_or(SwapError::NotMapped)?;
@@ -281,9 +280,10 @@ impl<M: SwapManager, S: Swapper, T:InactivePageTable> SwapExt<M, S, T> {
     **                               of beginning of the page
     **  @retval bool                 whether swap in happens.
     */
+    /*
     pub fn page_fault_handler(&mut self, page_table: &mut PageTable, pt: *mut T, addr: VirtAddr, swapin: bool, alloc_frame: impl FnOnce() -> PhysAddr) -> bool {
         // handle page delayed allocating
-        {
+        //{
             info!("try handling delayed frame allocator");
             let need_alloc ={
                 let entry = page_table.get_entry(addr).expect("fail to get entry");
@@ -311,7 +311,7 @@ impl<M: SwapManager, S: Swapper, T:InactivePageTable> SwapExt<M, S, T> {
                 return true;
             }
             info!("not need alloc!");
-        }
+        //}
         // now we didn't attach the cow so the present will be false when swapped(), to enable the cow some changes will be needed
         match page_table.get_entry(addr) {
             // infact the get_entry(addr) should not be None here
@@ -323,6 +323,7 @@ impl<M: SwapManager, S: Swapper, T:InactivePageTable> SwapExt<M, S, T> {
         self.swap_in(page_table, pt, addr, frame).ok().unwrap();
         true
     }
+    */
 }
 
 pub enum SwapError {
