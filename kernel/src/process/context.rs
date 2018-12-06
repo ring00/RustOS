@@ -53,6 +53,8 @@ impl ContextImpl {
     }
 
     /// Make a new user thread from ELF data
+    /// In new\_user (and fork) function, in fact the page should not be set swappable otherwise there may be pagefault in new\_user (and fork),
+    /// which may cause fatal error especifical in the multi-core situation. However since now the page won't be swapped out, I don't fix the potential bug.
     /*
     * @param:
     *   data: the ELF data stream
