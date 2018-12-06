@@ -210,6 +210,7 @@ impl ContextImpl {
 
 }
 
+/*
 impl Drop for ContextImpl{
     fn drop(&mut self){
         info!("come in to drop for ContextImpl");
@@ -231,9 +232,9 @@ impl Drop for ContextImpl{
             }
         }
         debug!("Finishing setting pages unswappable");
-        
     }
 }
+*/
 
 impl Debug for ContextImpl {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {

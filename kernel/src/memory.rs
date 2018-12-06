@@ -97,6 +97,9 @@ pub fn alloc_frame() -> Option<usize> {
     trace!("Allocate frame: {:x?}", ret);
     //do we need : unsafe { ACTIVE_TABLE_SWAP.force_unlock(); } ???
     Some(ret.unwrap_or_else(|| {
+        // here we should get the active_table's lock before we get the swap_table since in memroy_set's map function
+        // we get pagetable before we get the swap table lock
+        // otherwise we may run into dead lock
         let mut temp_table = active_table();
         swap_table().swap_out_any(temp_table.get_data_mut()).ok().expect("fail to swap out page")
     }))
@@ -241,7 +244,7 @@ impl MemoryHandler for SimpleMemoryHandler{
         self.flags.apply(pt.map(addr, target));
     }
 
-    fn unmap(&self, pt: &mut PageTable, addr: VirtAddr){
+    fn unmap(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
         pt.unmap(addr);
     }
     /*
@@ -279,7 +282,7 @@ impl MemoryHandler for NormalMemoryHandler{
         self.flags.apply(pt.map(addr, target));
     }
 
-    fn unmap(&self, pt: &mut PageTable, addr: VirtAddr){
+    fn unmap(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
         let target = pt.get_entry(addr).expect("fail to get entry").target();
         InactivePageTable0::dealloc_frame(target);
         pt.unmap(addr);
@@ -334,7 +337,10 @@ impl MemoryHandler for SwapMemoryHandler{
         }
     }
 
-    fn unmap(&self, pt: &mut PageTable, addr: VirtAddr){
+    fn unmap(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
+        unsafe{
+            self.swap_ext.lock().remove_from_swappable(pt, inpt as *mut InactivePageTable0, addr, || InactivePageTable0::alloc_frame().expect("alloc frame failed"));
+        }
         if pt.get_entry(addr).expect("fail to get entry").present(){
             let target = pt.get_entry(addr).expect("fail to get entry").target();
             InactivePageTable0::dealloc_frame(target);

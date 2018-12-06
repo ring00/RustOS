@@ -68,9 +68,9 @@ pub trait InactivePageTable {
 pub trait MemoryHandler{
     fn box_clone(&self) -> Box<MemoryHandler>;
 
-    fn map(&self, pt: &mut PageTable, intp: usize, addr: VirtAddr);
+    fn map(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr);
 
-    fn unmap(&self, pt: &mut PageTable, addr:VirtAddr);
+    fn unmap(&self, pt: &mut PageTable, inpt: usize, addr:VirtAddr);
 
     //fn page_fault_handler(&mut self, page_table: &mut PageTable, pt: usize, addr: VirtAddr) -> bool;
 }
@@ -172,10 +172,10 @@ impl MemoryArea {
     **  @param  pt: &mut T::Active   the page table to use
     **  @retval none
     */
-    fn unmap(&self, pt: &mut PageTable) {
+    fn unmap(&self, pt: &mut PageTable, inpt: usize) {
         for page in Page::range_of(self.start_addr, self.end_addr) {
             let addr = page.start_address();
-            self.memory_handler.unmap(pt, addr);
+            self.memory_handler.unmap(pt, inpt, addr);
         }
     }
 
@@ -331,10 +331,11 @@ impl<T: InactivePageTable> MemorySet<T> {
     */
     pub fn clear(&mut self) {
         let Self { ref mut page_table, ref mut areas, .. } = self;
+        let pt_ptr = (page_table) as *mut T as usize;
         info!("come in to clear");
         page_table.edit(|pt| {
             for area in areas.iter() {
-                area.unmap(pt);
+                area.unmap(pt, pt_ptr);
             }
         });
         info!("finish unmmap");
