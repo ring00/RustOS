@@ -328,9 +328,11 @@ impl InactivePageTable for InactivePageTable0 {
 impl InactivePageTable0 {
     /*
     * @brief:
-    *   map the kernel code memory address (p2 page table) in the new inactive page table according the current active page table
+    *   map the kernel (code and heap) memory address (p2 page table) in the new inactive page table according the current active page table
     */
     fn map_kernel(&mut self) {
+        // note that after remap_the_kernel the KERNEL_P2_INDEX point to the P1 table rather than the large(4M) data frame
+        // maybe a LAB part here
         let table = unsafe { &mut *ROOT_PAGE_TABLE };
         let e0 = table[0x40];
         let e1 = table[KERNEL_P2_INDEX];
