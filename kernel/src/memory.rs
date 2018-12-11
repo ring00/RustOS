@@ -455,11 +455,12 @@ impl MemoryHandler for SwapMemoryHandler{
         let mut allocated = {
             let mut temp_table = active_table();
             let entry = temp_table.get_entry(addr).expect("fail to get entry");
-            entry.target() == 0
+            entry.present() || entry.swapped()
+            // infact 0 frame is being allocated, it is dangerous to check allcated by entry.target() == 0
         };
         unsafe{
             let mut page_table = &mut *(inpt as *mut InactivePageTable0);
-            allocated = true; // for test
+            //allocated = true; // for test
             if !allocated {
                 delay_alloc.push(addr);
                 page_table.edit(|pt|{
@@ -489,6 +490,7 @@ impl MemoryHandler for SwapMemoryHandler{
 
 }
 
+
 impl SwapMemoryHandler{
     pub fn new(swap_ext: Arc<spin::Mutex<SwapExtType>>, flags: MemoryAttr, delay_alloc: Vec<VirtAddr>) -> Self {
         SwapMemoryHandler{
@@ -506,3 +508,68 @@ impl Clone for SwapMemoryHandler{
         SwapMemoryHandler::new(self.swap_ext.clone(), self.flags.clone(), Vec::<VirtAddr>::new())
     }
 }
+
+/*
+pub struct CowMemoryHandler{
+    cow_ext: Arc<spin::Mutex<CowExtType>>,
+    flags: MemoryAttr,
+}
+
+
+impl MemoryHandler for CowMemoryHandler{
+    //type Active = ActivePageTable;
+    //type Inactvie = InactivePageTable0;
+    fn box_clone(&self) -> Box<MemoryHandler>{
+        Box::new((*self).clone())
+    }
+
+    fn map(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
+        let target = InactivePageTable0::alloc_frame().expect("failed to allocate frame");
+        self.flags.apply(pt.map(addr, target));
+    }
+
+    fn unmap(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
+        let target = pt.get_entry(addr).expect("fail to get entry").target();
+        InactivePageTable0::dealloc_frame(target);
+        pt.unmap(addr);
+    }
+    
+    fn page_fault_handler(&self, page_table: &mut PageTable, inpt: usize, addr: VirtAddr) -> bool {
+        false
+    }
+
+    fn map_clone(&mut self, inpt: usize, addr: VirtAddr){
+        unsafe{
+            let Self {ref flags} = self;
+            let mut page_table = &mut *(inpt as *mut InactivePageTable0);
+            page_table.edit(|pt|{
+                let target = InactivePageTable0::alloc_frame().expect("failed to allocate frame");
+                flags.apply(pt.map(addr, target));
+            });
+            let data: Vec<u8> = Vec::from(slice::from_raw_parts(addr as *const u8, PAGE_SIZE));
+            page_table.with(||{
+                let page_mut = slice::from_raw_parts_mut(addr as *mut u8, PAGE_SIZE);
+                page_mut.copy_from_slice(data.as_slice());
+            });
+        }
+    }
+}
+
+impl CowMemoryHandler{
+    pub fn new(swap_ext: Arc<spin::Mutex<CowExtType>>, flags: MemoryAttr) -> Self {
+        SwapMemoryHandler{
+            cow_ext,
+            flags,
+            delay_alloc,
+        }
+    }
+}
+
+
+impl Clone for SwapMemoryHandler{
+    fn clone(&self) -> Self{
+        // when we fork a new process, all the page need to be map with physical phrame immediately
+        SwapMemoryHandler::new(self.swap_ext.clone(), self.flags.clone(), Vec::<VirtAddr>::new())
+    }
+}
+*/
