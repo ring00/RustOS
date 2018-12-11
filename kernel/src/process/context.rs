@@ -103,9 +103,9 @@ impl ContextImpl {
         }
         //info!("ustack_top is {:x?} start_address is {:x?}", ustack_top, Page::of_addr(ustack_top - 1).start_address());
         // for SwapMemoryHandler
-        //memory_set.push(MemoryArea::new(ustack_buttom, ustack_top, Box::new(SwapMemoryHandler::new(SWAP_TABLE.clone(), MemoryAttr::default().user(), delay_vec)), "user_stack"));
+        memory_set.push(MemoryArea::new(ustack_buttom, ustack_top, Box::new(SwapMemoryHandler::new(SWAP_TABLE.clone(), MemoryAttr::default().user(), delay_vec)), "user_stack"));
         // for CowMemoryHandler
-        memory_set.push(MemoryArea::new(ustack_buttom, ustack_top, Box::new(CowMemoryHandler::new(COW_TABLE.clone(), MemoryAttr::default().user())), "user_stack"));
+        //memory_set.push(MemoryArea::new(ustack_buttom, ustack_top, Box::new(CowMemoryHandler::new(COW_TABLE.clone(), MemoryAttr::default().user())), "user_stack"));
         //trace!("{:#x?}", memory_set);
 
         let entry_addr = elf.header.pt2.entry_point() as usize;
