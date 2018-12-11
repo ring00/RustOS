@@ -50,7 +50,7 @@ checklist = {
 		'I am child 30',
 		'I am child 31',
 	]},
-	'forktree':{'time':15, 'rule':[
+	'forktree':{'time':20, 'rule':[
 		"I am ''",
 		"I am '0'",
 		"I am '1'",
