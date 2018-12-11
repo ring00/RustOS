@@ -86,6 +86,16 @@ pub fn swap_table() -> spin::MutexGuard<'static, SwapExtType>{
     SWAP_TABLE.lock()
 }
 
+
+lazy_static!{
+    pub static ref COW_TABLE: Arc<spin::Mutex<CowExt>> = 
+        Arc::new(spin::Mutex::new(CowExt::new()));
+}
+
+pub fn cow_table() -> spin::MutexGuard<'static, CowExt>{
+    COW_TABLE.lock()
+}
+
 /*
 * @brief:
 *   allocate a free physical frame, if no free frame, then swap out one page and reture mapped frame as the free one
@@ -509,9 +519,9 @@ impl Clone for SwapMemoryHandler{
     }
 }
 
-/*
+
 pub struct CowMemoryHandler{
-    cow_ext: Arc<spin::Mutex<CowExtType>>,
+    cow_ext: Arc<spin::Mutex<CowExt>>,
     flags: MemoryAttr,
 }
 
@@ -524,52 +534,95 @@ impl MemoryHandler for CowMemoryHandler{
     }
 
     fn map(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
+        //info!("COME INTO COW MAP.");
         let target = InactivePageTable0::alloc_frame().expect("failed to allocate frame");
         self.flags.apply(pt.map(addr, target));
+        let entry = pt.get_entry(addr).expect("fail to get entry");
+        //entry.set_writable(false);
+        entry.set_shared(!self.flags.is_readonly());
+        entry.update();
+        self.cow_ext.lock().map_to_shared(target, !self.flags.is_readonly());
     }
 
     fn unmap(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
+        //info!("COME INTO COW UNMAP. addr is {:x?}", addr);
         let target = pt.get_entry(addr).expect("fail to get entry").target();
-        InactivePageTable0::dealloc_frame(target);
         pt.unmap(addr);
+        //info!("finish pt.unmap");
+        if self.cow_ext.lock().unmap_shared(target, !self.flags.is_readonly()){
+            //info!("finish unmap_shared");
+            InactivePageTable0::dealloc_frame(target);
+        }
+        //info!("COME OUT OF COW UNMAP.");
     }
     
     fn page_fault_handler(&self, page_table: &mut PageTable, inpt: usize, addr: VirtAddr) -> bool {
-        false
+        //info!("COME INTO COW PAGEFAULT HANDLER.");
+        if self.flags.is_readonly() {
+            return false;
+        }
+        let target = page_table.get_entry(addr).expect("fail to get entry").target();
+        if self.cow_ext.lock().is_one_shared(target){
+            let entry = page_table.get_entry(addr).expect("fail to get entry");
+            entry.set_writable(true);
+            entry.update();
+        }
+        else{
+            unsafe{
+                let page_addr = Page::of_addr(addr).start_address();
+                let data: Vec<u8> = Vec::from(slice::from_raw_parts(page_addr as *const u8, PAGE_SIZE));
+                self.cow_ext.lock().unmap_shared(target, true);
+                let new_target = InactivePageTable0::alloc_frame().expect("failed to allocate frame");
+                let entry = page_table.get_entry(addr).expect("fail to get entry");
+                entry.set_writable(true);
+                entry.set_target(new_target);
+                entry.update();
+                self.cow_ext.lock().map_to_shared(new_target, !self.flags.is_readonly());
+                let page_mut = slice::from_raw_parts_mut(page_addr as *mut u8, PAGE_SIZE);
+                page_mut.copy_from_slice(data.as_slice());
+            }
+        }
+        true
     }
 
     fn map_clone(&mut self, inpt: usize, addr: VirtAddr){
+        //info!("COME INTO COW MAP CLONE.");
         unsafe{
-            let Self {ref flags} = self;
+            let Self {ref mut cow_ext, ref flags} = self;
             let mut page_table = &mut *(inpt as *mut InactivePageTable0);
+            let target = {
+                let mut temp_table = active_table();
+                let entry = temp_table.get_entry(addr).expect("fail to get entry");
+                let ret = entry.target();
+                entry.set_writable(false);
+                entry.update();
+                ret
+            };
             page_table.edit(|pt|{
-                let target = InactivePageTable0::alloc_frame().expect("failed to allocate frame");
                 flags.apply(pt.map(addr, target));
-            });
-            let data: Vec<u8> = Vec::from(slice::from_raw_parts(addr as *const u8, PAGE_SIZE));
-            page_table.with(||{
-                let page_mut = slice::from_raw_parts_mut(addr as *mut u8, PAGE_SIZE);
-                page_mut.copy_from_slice(data.as_slice());
+                let entry = pt.get_entry(addr).expect("fail to get entry");
+                entry.set_writable(false);
+                entry.set_shared(!flags.is_readonly());
+                entry.update();
+                cow_ext.lock().map_to_shared(target, !flags.is_readonly());
             });
         }
     }
 }
 
 impl CowMemoryHandler{
-    pub fn new(swap_ext: Arc<spin::Mutex<CowExtType>>, flags: MemoryAttr) -> Self {
-        SwapMemoryHandler{
+    pub fn new(cow_ext: Arc<spin::Mutex<CowExt>>, flags: MemoryAttr) -> Self {
+        CowMemoryHandler{
             cow_ext,
             flags,
-            delay_alloc,
         }
     }
 }
 
 
-impl Clone for SwapMemoryHandler{
+impl Clone for CowMemoryHandler{
     fn clone(&self) -> Self{
         // when we fork a new process, all the page need to be map with physical phrame immediately
-        SwapMemoryHandler::new(self.swap_ext.clone(), self.flags.clone(), Vec::<VirtAddr>::new())
+        CowMemoryHandler::new(self.cow_ext.clone(), self.flags.clone())
     }
 }
-*/

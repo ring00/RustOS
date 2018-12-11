@@ -1,5 +1,5 @@
 use arch::interrupt::{TrapFrame, Context as ArchContext};
-use memory::{MemoryArea, MemoryAttr, MemorySet, KernelStack, swap_table, alloc_frame, active_table, NormalMemoryHandler, SwapMemoryHandler, SWAP_TABLE};
+use memory::{MemoryArea, MemoryAttr, MemorySet, KernelStack, swap_table, alloc_frame, active_table, NormalMemoryHandler, SwapMemoryHandler, CowMemoryHandler, SWAP_TABLE, COW_TABLE};
 use xmas_elf::{ElfFile, header, program::{Flags, ProgramHeader, Type}};
 use core::fmt::{Debug, Error, Formatter};
 use ucore_process::Context;
@@ -102,7 +102,10 @@ impl ContextImpl {
             }
         }
         //info!("ustack_top is {:x?} start_address is {:x?}", ustack_top, Page::of_addr(ustack_top - 1).start_address());
-        memory_set.push(MemoryArea::new(ustack_buttom, ustack_top, Box::new(SwapMemoryHandler::new(SWAP_TABLE.clone(), MemoryAttr::default().user(), delay_vec)), "user_stack"));
+        // for SwapMemoryHandler
+        //memory_set.push(MemoryArea::new(ustack_buttom, ustack_top, Box::new(SwapMemoryHandler::new(SWAP_TABLE.clone(), MemoryAttr::default().user(), delay_vec)), "user_stack"));
+        // for CowMemoryHandler
+        memory_set.push(MemoryArea::new(ustack_buttom, ustack_top, Box::new(CowMemoryHandler::new(COW_TABLE.clone(), MemoryAttr::default().user())), "user_stack"));
         //trace!("{:#x?}", memory_set);
 
         let entry_addr = elf.header.pt2.entry_point() as usize;
@@ -295,7 +298,10 @@ fn memory_set_from<'a>(elf: &'a ElfFile<'a>) -> Box<MemorySet> {
             ProgramHeader::Ph64(ph) => (ph.virtual_addr as usize, ph.mem_size as usize, ph.flags),
         };
         info!("virtaddr: {:x?}, memory size: {:x?}, flags: {}", virt_addr, mem_size, flags);
-        set.push(MemoryArea::new(virt_addr, virt_addr + mem_size, Box::new(SwapMemoryHandler::new(SWAP_TABLE.clone(), memory_attr_from(flags), Vec::<VirtAddr>::new())), ""));
+        // for SwapMemoryHandler
+        //set.push(MemoryArea::new(virt_addr, virt_addr + mem_size, Box::new(SwapMemoryHandler::new(SWAP_TABLE.clone(), memory_attr_from(flags), Vec::<VirtAddr>::new())), ""));
+        // for CowMemoryHandler
+        set.push(MemoryArea::new(virt_addr, virt_addr + mem_size, Box::new(CowMemoryHandler::new(COW_TABLE.clone(), memory_attr_from(flags))), ""));
 
     }
     set

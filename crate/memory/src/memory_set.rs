@@ -70,6 +70,7 @@ pub trait MemoryHandler{
 
     fn map(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr);
 
+    // noted that map_clone is used without the new inactive page table being enabled 
     fn map_clone(&mut self, inpt: usize, addr: VirtAddr);
 
     fn unmap(&self, pt: &mut PageTable, inpt: usize, addr:VirtAddr);
@@ -248,6 +249,8 @@ impl MemoryAttr {
         self.hide = true;
         self
     }
+
+    
     /*
     **  @brief  apply the memory attribute to a page table entry
     **  @param  entry: &mut impl Entry
@@ -260,6 +263,10 @@ impl MemoryAttr {
         if self.execute { entry.set_execute(true); }
         if self.hide { entry.set_present(false); }
         if self.user || self.readonly || self.execute || self.hide { entry.update(); }
+    }
+
+    pub fn is_readonly(&self) -> bool {
+        self.readonly
     }
 }
 

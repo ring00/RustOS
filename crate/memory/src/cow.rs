@@ -49,11 +49,7 @@ impl CowExt {
     **                               else set the page as readonly and shared
     **  @retval none
     */
-    pub fn map_to_shared(&mut self, page_table: &mut PageTable, addr: VirtAddr, target: PhysAddr, writable: bool) {
-        let entry = page_table.map(addr, target);
-        entry.set_writable(false);
-        entry.set_shared(writable);
-        entry.update();
+    pub fn map_to_shared(&mut self, target: PhysAddr, writable: bool) {
         let frame = target / PAGE_SIZE;
         match writable {
             true => self.rc_map.write_increase(&frame),
@@ -64,19 +60,30 @@ impl CowExt {
     **  @brief  unmap a virual address from physics address
     **          with apecial additional process for shared page
     **  @param  addr: VirtAddr       the virual address to unmap
-    **  @retval none
+    **  @retval bool                 whether the target frame still have reference
     */
-    pub fn unmap_shared(&mut self, page_table: &mut PageTable,  addr: VirtAddr) {
-        let entry = page_table.get_entry(addr)
-            .expect("entry not exist");
-        let frame = entry.target() / PAGE_SIZE;
-        if entry.readonly_shared() {
+    pub fn unmap_shared(&mut self, target: PhysAddr, writable: bool) -> bool {
+        let frame = target / PAGE_SIZE;
+        if !writable {
             self.rc_map.read_decrease(&frame);
-        } else if entry.writable_shared() {
+        } 
+        else {
+            //info!("before decrease");
+            //info!("write coutn: {}", self.rc_map.write_count(&frame));
             self.rc_map.write_decrease(&frame);
         }
-        page_table.unmap(addr);
+        //info!("finish decrease");
+        //info!("read count: {}", self.rc_map.read_count(&frame));
+        //info!("write count: {}", self.rc_map.write_count(&frame));
+        self.rc_map.read_count(&frame) + self.rc_map.write_count(&frame) == 0
+        //page_table.unmap(addr);
     }
+
+    pub fn is_one_shared(&mut self, target: PhysAddr) -> bool {
+        let frame = target / PAGE_SIZE;
+        self.rc_map.read_count(&frame) + self.rc_map.write_count(&frame) == 1
+    }
+
     /*
     **  @brief  execute the COW process for page fault
     **          This function must be called whenever PageFault happens.
