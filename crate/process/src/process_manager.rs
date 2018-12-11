@@ -53,9 +53,25 @@ impl ProcessManager {
     }
 
     fn alloc_pid(&self) -> Pid {
-        for (i, proc) in self.procs.iter().enumerate() {
-            if proc.lock().is_none() {
+        for (i, proc_mux) in self.procs.iter().enumerate() {
+            let mut proc_lock = proc_mux.lock();
+            if proc_lock.is_none() {
                 return i;
+            }
+            let proc = proc_lock.as_ref().expect("process not exist");
+
+            match proc.status {
+                Status::Exited(_) => {
+                    if proc.parent == 0 {
+                        for child in proc.children.iter() {
+                            (&self.procs[*child]).lock().as_mut().expect("process not exist").parent = 0;
+                        }
+                        *proc_lock = None;
+                    }
+                }
+                _ => {
+                    continue;
+                }
             }
         }
         panic!("Process number exceeded");
