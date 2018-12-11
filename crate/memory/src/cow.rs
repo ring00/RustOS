@@ -26,20 +26,18 @@ use alloc::collections::BTreeMap;
 use core::ops::{Deref, DerefMut};
 
 /// Wrapper for page table, supporting shared map & copy-on-write
-pub struct CowExt<T: PageTable> {
-    page_table: T,
+pub struct CowExt{
     rc_map: FrameRcMap,
 }
 
-impl<T: PageTable> CowExt<T> {
+impl CowExt {
     /*
     **  @brief  create a COW extension
     **  @param  page_table: T        the inner page table
     **  @retval CowExt               the COW extension created
     */
-    pub fn new(page_table: T) -> Self {
+    pub fn new() -> Self {
         CowExt {
-            page_table,
             rc_map: FrameRcMap::default(),
         }
     }
@@ -51,8 +49,8 @@ impl<T: PageTable> CowExt<T> {
     **                               else set the page as readonly and shared
     **  @retval none
     */
-    pub fn map_to_shared(&mut self, addr: VirtAddr, target: PhysAddr, writable: bool) {
-        let entry = self.page_table.map(addr, target);
+    pub fn map_to_shared(&mut self, page_table: &mut PageTable, addr: VirtAddr, target: PhysAddr, writable: bool) {
+        let entry = page_table.map(addr, target);
         entry.set_writable(false);
         entry.set_shared(writable);
         entry.update();
@@ -68,8 +66,8 @@ impl<T: PageTable> CowExt<T> {
     **  @param  addr: VirtAddr       the virual address to unmap
     **  @retval none
     */
-    pub fn unmap_shared(&mut self, addr: VirtAddr) {
-        let entry = self.page_table.get_entry(addr)
+    pub fn unmap_shared(&mut self, page_table: &mut PageTable,  addr: VirtAddr) {
+        let entry = page_table.get_entry(addr)
             .expect("entry not exist");
         let frame = entry.target() / PAGE_SIZE;
         if entry.readonly_shared() {
@@ -77,7 +75,7 @@ impl<T: PageTable> CowExt<T> {
         } else if entry.writable_shared() {
             self.rc_map.write_decrease(&frame);
         }
-        self.page_table.unmap(addr);
+        page_table.unmap(addr);
     }
     /*
     **  @brief  execute the COW process for page fault
@@ -89,8 +87,9 @@ impl<T: PageTable> CowExt<T> {
     **                               of beginning of the page
     **  @retval bool                 whether copy-on-write happens.
     */
-    pub fn page_fault_handler(&mut self, addr: VirtAddr, alloc_frame: impl FnOnce() -> PhysAddr) -> bool {
-        let entry = self.page_table.get_entry(addr);
+    pub fn page_fault_handler(&mut self, page_table: &mut PageTable, addr: VirtAddr, alloc_frame: impl FnOnce() -> PhysAddr) -> bool {
+        /*
+        let entry = page_table.get_entry(addr);
         if entry.is_none() {
             return false;
         }
@@ -114,10 +113,12 @@ impl<T: PageTable> CowExt<T> {
         self.map(addr, alloc_frame());
 
         self.get_page_slice_mut(addr).copy_from_slice(&temp_data[..]);
+        */
         true
     }
 }
 
+/*
 impl<T: PageTable> Deref for CowExt<T> {
     type Target = T;
 
@@ -131,7 +132,7 @@ impl<T: PageTable> DerefMut for CowExt<T> {
         &mut self.page_table
     }
 }
-
+*/
 /// A map contains reference count for shared frame
 ///
 /// It will lazily construct the `BTreeMap`, to avoid heap alloc when heap is unavailable.
@@ -203,7 +204,7 @@ impl FrameRcMap {
         self.0.as_mut().unwrap()
     }
 }
-
+/*
 pub mod test {
     use super::*;
     use alloc::boxed::Box;
@@ -230,6 +231,7 @@ pub mod test {
         test_with(&mut pt);
     }
 
+    
     pub fn test_with(pt: &mut CowExt<impl PageTable>) {
         let target = 0x0;
         let frame = 0x0;
@@ -269,4 +271,6 @@ pub mod test {
         assert_eq!(pt.read(0x1000), 2);
         assert_eq!(pt.read(0x2000), 3);
     }
+    
 }
+*/

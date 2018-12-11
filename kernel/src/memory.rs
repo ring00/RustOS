@@ -13,6 +13,7 @@ use sync::{SpinNoIrqLock, SpinNoIrq, MutexGuard};
 use alloc::vec::Vec;
 use alloc::sync::Arc;
 use alloc::boxed::Box;
+use core::slice;
 
 pub type MemorySet = MemorySet_<InactivePageTable0>;
 pub type SwapExtType = SwapExt_<fifo::FifoSwapManager, mock_swapper::MockSwapper, InactivePageTable0>;
@@ -243,6 +244,7 @@ pub fn init_heap() {
 //    }
 //}
 
+/// MemoryHandler for kernel memory
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct SimpleMemoryHandler{
     start_addr: VirtAddr,
@@ -268,6 +270,24 @@ impl MemoryHandler for SimpleMemoryHandler{
     
     fn page_fault_handler(&self, page_table: &mut PageTable, inpt: usize, addr: VirtAddr) -> bool{
         false
+    }
+
+    fn map_clone(&mut self, inpt: usize, addr: VirtAddr){
+        info!("come into SimpleMemoryHandler map_clone, the addr is {:x?}", addr);
+        unsafe{
+            let Self {ref start_addr, ref phys_start_addr, ref flags} = self;
+            let mut page_table = &mut *(inpt as *mut InactivePageTable0);
+            page_table.edit(|pt|{
+                let target = addr - *start_addr + *phys_start_addr;
+                flags.apply(pt.map(addr, target));
+            });
+
+            let data: Vec<u8> = Vec::from(slice::from_raw_parts(addr as *const u8, PAGE_SIZE));
+            page_table.with(||{
+                let page_mut = slice::from_raw_parts_mut(addr as *mut u8, PAGE_SIZE);
+                page_mut.copy_from_slice(data.as_slice());
+            });
+        }
     }
     
 }
@@ -308,6 +328,22 @@ impl MemoryHandler for NormalMemoryHandler{
     
     fn page_fault_handler(&self, page_table: &mut PageTable, inpt: usize, addr: VirtAddr) -> bool {
         false
+    }
+
+    fn map_clone(&mut self, inpt: usize, addr: VirtAddr){
+        unsafe{
+            let Self {ref flags} = self;
+            let mut page_table = &mut *(inpt as *mut InactivePageTable0);
+            page_table.edit(|pt|{
+                let target = InactivePageTable0::alloc_frame().expect("failed to allocate frame");
+                flags.apply(pt.map(addr, target));
+            });
+            let data: Vec<u8> = Vec::from(slice::from_raw_parts(addr as *const u8, PAGE_SIZE));
+            page_table.with(||{
+                let page_mut = slice::from_raw_parts_mut(addr as *mut u8, PAGE_SIZE);
+                page_mut.copy_from_slice(data.as_slice());
+            });
+        }
     }
 }
 
@@ -413,6 +449,43 @@ impl MemoryHandler for SwapMemoryHandler{
         
     }
     
+    fn map_clone(&mut self, inpt: usize, addr: VirtAddr){
+        info!("Come into SwapMemoryHandler map_clone, the addr is {:x?}", addr);
+        let Self {ref swap_ext, ref flags, ref mut delay_alloc} = self;
+        let mut allocated = {
+            let mut temp_table = active_table();
+            let entry = temp_table.get_entry(addr).expect("fail to get entry");
+            entry.target() == 0
+        };
+        unsafe{
+            let mut page_table = &mut *(inpt as *mut InactivePageTable0);
+            allocated = true; // for test
+            if !allocated {
+                delay_alloc.push(addr);
+                page_table.edit(|pt|{
+                    {
+                        let entry = pt.map(addr,0);
+                        flags.apply(entry);
+                    }
+                    let entry = pt.get_entry(addr).expect("fail to get entry");
+                    entry.set_present(false);
+                    entry.update();
+                });
+            }
+            else{
+                page_table.edit(|pt|{
+                    let target = InactivePageTable0::alloc_frame().expect("failed to allocate frame");
+                    flags.apply(pt.map(addr, target));
+                    swap_ext.lock().set_swappable(pt, inpt as *mut InactivePageTable0, addr);
+                });
+                let data: Vec<u8> = Vec::from(slice::from_raw_parts(addr as *const u8, PAGE_SIZE));
+                page_table.with(||{
+                    let page_mut = slice::from_raw_parts_mut(addr as *mut u8, PAGE_SIZE);
+                    page_mut.copy_from_slice(data.as_slice());
+                });
+            }
+        }
+    }
 
 }
 

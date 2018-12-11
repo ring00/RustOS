@@ -70,6 +70,8 @@ pub trait MemoryHandler{
 
     fn map(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr);
 
+    fn map_clone(&mut self, inpt: usize, addr: VirtAddr);
+
     fn unmap(&self, pt: &mut PageTable, inpt: usize, addr:VirtAddr);
 
     fn page_fault_handler(&self, page_table: &mut PageTable, inpt: usize, addr: VirtAddr) -> bool;
@@ -194,6 +196,13 @@ impl MemoryArea {
 
     pub fn page_fault_handler(&self, page_table: &mut PageTable, inpt: usize, addr: VirtAddr) -> bool {
         self.memory_handler.page_fault_handler(page_table, inpt, addr)
+    }
+
+    fn map_clone(&mut self, inpt: usize){
+        for page in Page::range_of(self.start_addr, self.end_addr) {
+            let addr = page.start_address();
+            self.memory_handler.map_clone(inpt, addr);
+        }
     }
 }
 
@@ -362,11 +371,19 @@ impl<T: InactivePageTable> Clone for MemorySet<T> {
         let mut page_table = T::new();
         let pt_ptr = (&mut page_table) as *mut T as usize;
         let mut newareas = self.areas.clone();
+        
+        for area in newareas.iter_mut(){
+            area.map_clone(pt_ptr);
+        }
+        
+        /*
         page_table.edit(|pt| {
             for area in newareas.iter() {
                 area.map(pt, pt_ptr);
             }
         });
+        */
+
         info!("finish map in clone!");
         MemorySet {
             areas: newareas,

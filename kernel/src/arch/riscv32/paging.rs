@@ -186,14 +186,19 @@ impl Entry for PageEntry {
         let frame = Frame::of_addr(PhysAddr::new(target as u32));
         self.0.set(frame, flags);
     }
-    fn writable_shared(&self) -> bool { self.0.flags().contains(EF::RESERVED1) }
-    fn readonly_shared(&self) -> bool { self.0.flags().contains(EF::RESERVED2) }
+
+    fn writable_shared(&self) -> bool { self.0.flags().contains(EF::RESERVED2) }
+    fn readonly_shared(&self) -> bool {unimplemented!()}
+    //fn readonly_shared(&self) -> bool { self.0.flags().contains(EF::RESERVED2) }
     fn set_shared(&mut self, writable: bool) {
         let flags = self.as_flags();
-        flags.set(EF::RESERVED1, writable);
-        flags.set(EF::RESERVED2, !writable);
+        //flags.set(EF::RESERVED1, writable);
+        // to set the real write bit in RESERVED2
+        flags.set(EF::RESERVED2, writable);
     }
-    fn clear_shared(&mut self) { self.as_flags().remove(EF::RESERVED1 | EF::RESERVED2); }
+    fn clear_shared(&mut self) { self.as_flags().remove(EF::RESERVED2); }
+    //fn clear_shared(&mut self) { self.as_flags().remove(EF::RESERVED1 | EF::RESERVED2); }
+
     fn swapped(&self) -> bool { self.0.flags().contains(EF::RESERVED1) }
     fn set_swapped(&mut self, value: bool) { self.as_flags().set(EF::RESERVED1, value); }
     fn user(&self) -> bool { self.0.flags().contains(EF::USER) }

@@ -163,7 +163,9 @@ impl ContextImpl {
         //memory_set_record().push_back(mmset_ptr);
 
         info!("before copy data to temp space");
+        
         // Copy data to temp space
+        /*
         use alloc::vec::Vec;
         let datas: Vec<Vec<u8>> = memory_set.iter().map(|area| {
             Vec::from(unsafe { area.as_slice() })
@@ -179,6 +181,7 @@ impl ContextImpl {
                 }
             });
         }
+        */
 
         info!("temporary copy data!");
         let kstack = KernelStack::new();
