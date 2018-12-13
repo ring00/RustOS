@@ -83,63 +83,8 @@ impl CowExt {
         let frame = target / PAGE_SIZE;
         self.rc_map.read_count(&frame) + self.rc_map.write_count(&frame) == 1
     }
-
-    /*
-    **  @brief  execute the COW process for page fault
-    **          This function must be called whenever PageFault happens.
-    **  @param  addr: VirtAddr       the virual address of the page fault
-    **  @param  alloc_frame: impl FnOnce() -> PhysAddr
-    **                               the page allocation function
-    **                               that allocate a page and returns physics address
-    **                               of beginning of the page
-    **  @retval bool                 whether copy-on-write happens.
-    */
-    pub fn page_fault_handler(&mut self, page_table: &mut PageTable, addr: VirtAddr, alloc_frame: impl FnOnce() -> PhysAddr) -> bool {
-        /*
-        let entry = page_table.get_entry(addr);
-        if entry.is_none() {
-            return false;
-        }
-        let entry = entry.unwrap();
-        if !entry.readonly_shared() && !entry.writable_shared() {
-            return false;
-        }
-        let frame = entry.target() / PAGE_SIZE;
-        if self.rc_map.read_count(&frame) == 0 && self.rc_map.write_count(&frame) == 1 {
-            entry.clear_shared();
-            entry.set_writable(true);
-            entry.update();
-            self.rc_map.write_decrease(&frame);
-            return true;
-        }
-        use core::mem::uninitialized;
-        let mut temp_data: [u8; PAGE_SIZE] = unsafe { uninitialized() };
-        temp_data[..].copy_from_slice(self.get_page_slice_mut(addr));
-
-        self.unmap_shared(addr);
-        self.map(addr, alloc_frame());
-
-        self.get_page_slice_mut(addr).copy_from_slice(&temp_data[..]);
-        */
-        true
-    }
 }
 
-/*
-impl<T: PageTable> Deref for CowExt<T> {
-    type Target = T;
-
-    fn deref(&self) -> &<Self as Deref>::Target {
-        &self.page_table
-    }
-}
-
-impl<T: PageTable> DerefMut for CowExt<T> {
-    fn deref_mut(&mut self) -> &mut <Self as Deref>::Target {
-        &mut self.page_table
-    }
-}
-*/
 /// A map contains reference count for shared frame
 ///
 /// It will lazily construct the `BTreeMap`, to avoid heap alloc when heap is unavailable.

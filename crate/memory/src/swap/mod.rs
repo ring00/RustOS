@@ -125,13 +125,6 @@ impl<M: SwapManager, S: Swapper, T:InactivePageTable> SwapExt<M, S, T> {
                 swap_manager.push(frame);
             }
         });
-        /*
-        let token = unsafe{
-            (*pt).token()
-        };
-        let frame = Frame::new(pt as usize, addr, token);
-        self.swap_manager.push(frame);
-        */
     }
 
     /*
@@ -268,62 +261,6 @@ impl<M: SwapManager, S: Swapper, T:InactivePageTable> SwapExt<M, S, T> {
         self.swap_manager.push(frame);
         Ok(())
     }
-    /*
-    **  @brief  execute the frame delayed allocate and  swap process for page fault
-    **          This function must be called whenever PageFault happens.
-    **  @param  pt: *mut T2          the raw pointer for the target page's inactive page table (exactly the current page table)
-    **  @param  addr: VirtAddr       the virual address of the page fault
-    **  @param  swapin: bool         whether to set the page swappable if delayed allocate a frame for a page
-    **  @param  alloc_frame: impl FnOnce() -> PhysAddr
-    **                               the page allocation function
-    **                               that allocate a page and returns physics address
-    **                               of beginning of the page
-    **  @retval bool                 whether swap in happens.
-    */
-    /*
-    pub fn page_fault_handler(&mut self, page_table: &mut PageTable, pt: *mut T, addr: VirtAddr, swapin: bool, alloc_frame: impl FnOnce() -> PhysAddr) -> bool {
-        // handle page delayed allocating
-        //{
-            info!("try handling delayed frame allocator");
-            let need_alloc ={
-                let entry = page_table.get_entry(addr).expect("fail to get entry");
-                //info!("got entry!");
-                !entry.present() && !entry.swapped()
-            };
-            info!("need_alloc got");
-            if need_alloc {
-                info!("need_alloc!");
-                let frame = alloc_frame();
-                {
-                    let entry = page_table.get_entry(addr).unwrap();
-                    entry.set_target(frame);
-                    //let new_entry = self.page_table.map(addr, frame);
-                    entry.set_present(true);
-                    entry.update();
-                }
-                if(swapin){
-                    unsafe {
-                        self.set_swappable(page_table, pt, addr & 0xfffff000);
-                    }
-                }
-                //area.get_flags().apply(new_entry); this instruction may be used when hide attr is used
-                info!("allocated successfully");
-                return true;
-            }
-            info!("not need alloc!");
-        //}
-        // now we didn't attach the cow so the present will be false when swapped(), to enable the cow some changes will be needed
-        match page_table.get_entry(addr) {
-            // infact the get_entry(addr) should not be None here
-            None => return false,
-            Some(entry) => if !entry.swapped() { return false; },
-        }
-        // Allocate a frame, if failed, swap out a page
-        let frame = alloc_frame();
-        self.swap_in(page_table, pt, addr, frame).ok().unwrap();
-        true
-    }
-    */
 }
 
 pub enum SwapError {

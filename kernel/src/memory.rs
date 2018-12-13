@@ -7,7 +7,6 @@ use ucore_memory::{*, paging::PageTable};
 use ucore_memory::cow::CowExt;
 pub use ucore_memory::memory_set::{MemoryArea, MemoryAttr, MemorySet as MemorySet_, InactivePageTable, MemoryHandler};
 use ucore_memory::swap::{fifo, mock_swapper, SwapExt as SwapExt_};
-//use process::{processor, PROCESSOR};
 use process::{process};
 use sync::{SpinNoIrqLock, SpinNoIrq, MutexGuard};
 use alloc::vec::Vec;
@@ -29,30 +28,6 @@ pub type FrameAlloc = BitAlloc4K;
 lazy_static! {
     pub static ref FRAME_ALLOCATOR: SpinNoIrqLock<FrameAlloc> = SpinNoIrqLock::new(FrameAlloc::default());
 }
-// record the user memory set for pagefault function (swap in/out and frame delayed allocate) temporarily when page fault in new_user() or fork() function
-// after the process is set we can use use processor() to get the inactive page table
-/*
-lazy_static! {
-    pub static ref MEMORY_SET_RECORD: SpinNoIrqLock<VecDeque<usize>> = SpinNoIrqLock::new(VecDeque::default());
-}
-
-pub fn memory_set_record() -> MutexGuard<'static, VecDeque<usize>, SpinNoIrq> {
-    MEMORY_SET_RECORD.lock()
-}
-*/
-
-/*
-lazy_static! {
-    static ref ACTIVE_TABLE: SpinNoIrqLock<CowExt<ActivePageTable>> = SpinNoIrqLock::new(unsafe {
-        CowExt::new(ActivePageTable::new())
-    });
-}
-
-/// The only way to get active page table
-pub fn active_table() -> MutexGuard<'static, CowExt<ActivePageTable>, SpinNoIrq> {
-    ACTIVE_TABLE.lock()
-}
-*/
 
 lazy_static! {
     static ref ACTIVE_TABLE: SpinNoIrqLock<ActivePageTable> = SpinNoIrqLock::new(unsafe {
@@ -64,18 +39,6 @@ lazy_static! {
 pub fn active_table() -> MutexGuard<'static, ActivePageTable, SpinNoIrq> {
     ACTIVE_TABLE.lock()
 }
-
-/*
-// Page table for swap in and out
-lazy_static!{
-    static ref ACTIVE_TABLE_SWAP: SpinNoIrqLock<SwapExt<ActivePageTable, fifo::FifoSwapManager, mock_swapper::MockSwapper>> =
-        SpinNoIrqLock::new(unsafe{SwapExt::new(ActivePageTable::new(), fifo::FifoSwapManager::default(), mock_swapper::MockSwapper::default())});
-}
-
-pub fn active_table_swap() -> MutexGuard<'static, SwapExt<ActivePageTable, fifo::FifoSwapManager, mock_swapper::MockSwapper>, SpinNoIrq>{
-    ACTIVE_TABLE_SWAP.lock()
-}
-*/
 
 lazy_static!{
     pub static ref SWAP_TABLE: Arc<spin::Mutex<SwapExtType>> = 
@@ -156,60 +119,7 @@ pub fn page_fault_handler(addr: usize) -> bool {
     //unsafe { ACTIVE_TABLE_SWAP.force_unlock(); }
     
     info!("active page table token in pg fault is {:x?}, virtaddr is {:x?}", ActivePageTable::token(), addr);
-    /*
-    let mmset_record = memory_set_record();
-    let id = mmset_record.iter()
-            .position(|x| unsafe{(*(x.clone() as *mut MemorySet)).get_page_table_mut().token() == ActivePageTable::token()});
-    /*LAB3 EXERCISE 1: YOUR STUDENT NUMBER
-    * handle the frame deallocated
-    */
-    assert!(!id.is_none());
-    match id {
-        Some(targetid) => {
-            info!("get id from memroy set recorder.");
-            let mmset_ptr = mmset_record.get(targetid).expect("fail to get mmset_ptr").clone();
-            // get current mmset
-
-            let current_mmset = unsafe{&mut *(mmset_ptr as *mut MemorySet)};
-            //check whether the vma is legal
-            if current_mmset.find_area(addr).is_none(){
-                return false;
-            }
-
-            let pt = current_mmset.get_page_table_mut();
-            info!("pt got!");
-            if swap_table().page_fault_handler(active_table().get_data_mut(), pt as *mut InactivePageTable0, addr, false, || alloc_frame().expect("fail to alloc frame")){
-                return true;
-            }
-        },
-        None => {
-            info!("get pt from processor()");
-            if process().get_memory_set_mut().find_area(addr).is_none(){
-                return false;
-            }
-
-            let pt = process().get_memory_set_mut().get_page_table_mut();
-            info!("pt got");
-            let mut temp_table = active_table();
-            if swap_table().page_fault_handler(temp_table.get_data_mut(), pt as *mut InactivePageTable0, addr, true, || alloc_frame().expect("fail to alloc frame")){
-                return true;
-            }
-        },
-    };
-    */
     info!("get pt from process()");
-    /*
-    if process().get_memory_set_mut().find_area(addr).is_none(){
-        return false;
-    }
-
-    let pt = process().get_memory_set_mut().get_page_table_mut();
-    info!("pt got");
-    let mut temp_table = active_table();
-    if swap_table().page_fault_handler(temp_table.get_data_mut(), pt as *mut InactivePageTable0, addr, true, || alloc_frame().expect("fail to alloc frame")){
-        return true;
-    }
-    */
     let target_area = process().get_memory_set_mut().find_area(addr);
     match target_area{
         Some(area) => {
@@ -226,16 +136,6 @@ pub fn page_fault_handler(addr: usize) -> bool {
             return false;
         },
     };
-    //////////////////////////////////////////////////////////////////////////////
-
-
-    // Handle copy on write (not being used now)
-    /*
-    unsafe { ACTIVE_TABLE.force_unlock(); }
-    if active_table().page_fault_handler(addr, || alloc_frame().expect("fail to alloc frame")){
-        return true;
-    }
-    */
     false
 }
 
@@ -319,8 +219,6 @@ pub struct NormalMemoryHandler{
 
 
 impl MemoryHandler for NormalMemoryHandler{
-    //type Active = ActivePageTable;
-    //type Inactvie = InactivePageTable0;
     fn box_clone(&self) -> Box<MemoryHandler>{
         Box::new((*self).clone())
     }
@@ -368,14 +266,10 @@ impl NormalMemoryHandler{
 pub struct SwapMemoryHandler{
     swap_ext: Arc<spin::Mutex<SwapExtType>>,
     flags: MemoryAttr,
-    //delay_alloc: bool,
     delay_alloc: Vec<VirtAddr>,
-    //page_table: *mut InactivePageTable0,
 }
 
 impl MemoryHandler for SwapMemoryHandler{
-    //type Active = ActivePageTable;
-    //type Inactvie = InactivePageTable0;
     fn box_clone(&self) -> Box<MemoryHandler>{
         Box::new((*self).clone())
     }
@@ -416,9 +310,7 @@ impl MemoryHandler for SwapMemoryHandler{
     }
     
     fn page_fault_handler(&self, page_table: &mut PageTable, inpt: usize, addr: VirtAddr) -> bool {
-        //self.swap_ext.lock().page_fault_handler(page_table, inpt as *mut InactivePageTable0, addr, true, || InactivePageTable0::alloc_frame().expect("alloc frame failed"))
-        // handle page delayed allocating
-        
+        // check whether need to handle page delayed allocating
         let id = self.delay_alloc.iter().position(|x|*x == addr);
         if id.is_some(){
             info!("try handling delayed frame allocator");
