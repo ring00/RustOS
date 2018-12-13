@@ -91,7 +91,7 @@ checklist = {
 	]}
 }
 
-unit_test = ['/crate/process', ]
+unit_test = ['/crate/process', '/crate/memory']
 
 realpath = sys.path[0]
 #os.system(realpath+'/clean_and_make.sh')

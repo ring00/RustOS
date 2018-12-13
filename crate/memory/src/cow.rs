@@ -68,13 +68,8 @@ impl CowExt {
             self.rc_map.read_decrease(&frame);
         } 
         else {
-            //info!("before decrease");
-            //info!("write coutn: {}", self.rc_map.write_count(&frame));
             self.rc_map.write_decrease(&frame);
         }
-        //info!("finish decrease");
-        //info!("read count: {}", self.rc_map.read_count(&frame));
-        //info!("write count: {}", self.rc_map.write_count(&frame));
         self.rc_map.read_count(&frame) + self.rc_map.write_count(&frame) == 0
         //page_table.unmap(addr);
     }
@@ -156,15 +151,15 @@ impl FrameRcMap {
         self.0.as_mut().unwrap()
     }
 }
-/*
+
 pub mod test {
     use super::*;
     use alloc::boxed::Box;
 
     #[test]
     fn test() {
-        let mut pt = CowExt::new(MockPageTable::new());
-        let pt0 = unsafe { &mut *(&mut pt as *mut CowExt<MockPageTable>) };
+        let mut pt = CowExt::new();
+        //let pt0 = unsafe { &mut *(&mut pt as *mut CowExt<MockPageTable>) };
 
         struct FrameAlloc(usize);
         impl FrameAlloc {
@@ -176,53 +171,29 @@ pub mod test {
         }
         let mut alloc = FrameAlloc(4);
 
-        pt.page_table.set_handler(Box::new(move |_, addr: VirtAddr| {
-            pt0.page_fault_handler(addr, || alloc.alloc());
-        }));
+        //pt.page_table.set_handler(Box::new(move |_, addr: VirtAddr| {
+        //    pt0.page_fault_handler(addr, || alloc.alloc());
+        //}));
 
         test_with(&mut pt);
     }
 
     
-    pub fn test_with(pt: &mut CowExt<impl PageTable>) {
+    pub fn test_with(pt: &mut CowExt) {
         let target = 0x0;
         let frame = 0x0;
 
-        pt.map(0x1000, target);
-        pt.write(0x1000, 1);
-        assert_eq!(pt.read(0x1000), 1);
-        pt.unmap(0x1000);
-
-        pt.map_to_shared(0x1000, target, true);
-        pt.map_to_shared(0x2000, target, true);
-        pt.map_to_shared(0x3000, target, false);
+        pt.map_to_shared(target, true);
+        pt.map_to_shared(target, true);
+        pt.map_to_shared(target, false);
         assert_eq!(pt.rc_map.read_count(&frame), 1);
         assert_eq!(pt.rc_map.write_count(&frame), 2);
-        assert_eq!(pt.read(0x1000), 1);
-        assert_eq!(pt.read(0x2000), 1);
-        assert_eq!(pt.read(0x3000), 1);
 
-        pt.write(0x1000, 2);
-        assert_eq!(pt.rc_map.read_count(&frame), 1);
-        assert_eq!(pt.rc_map.write_count(&frame), 1);
-        assert_ne!(pt.get_entry(0x1000).unwrap().target(), target);
-        assert_eq!(pt.read(0x1000), 2);
-        assert_eq!(pt.read(0x2000), 1);
-        assert_eq!(pt.read(0x3000), 1);
-
-        pt.unmap_shared(0x3000);
+        pt.unmap_shared(target, true);
+        pt.unmap_shared(target, false);
         assert_eq!(pt.rc_map.read_count(&frame), 0);
         assert_eq!(pt.rc_map.write_count(&frame), 1);
-        // assert!(!pt.get_entry(0x3000).present());
-
-        pt.write(0x2000, 3);
-        assert_eq!(pt.rc_map.read_count(&frame), 0);
-        assert_eq!(pt.rc_map.write_count(&frame), 0);
-        assert_eq!(pt.get_entry(0x2000).unwrap().target(), target,
-                   "The last write reference should not allocate new frame.");
-        assert_eq!(pt.read(0x1000), 2);
-        assert_eq!(pt.read(0x2000), 3);
+        assert!(pt.is_one_shared(target));
     }
     
 }
-*/

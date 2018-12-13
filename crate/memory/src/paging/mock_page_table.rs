@@ -62,9 +62,8 @@ impl Entry for MockEntry {
 type PageFaultHandler = Box<FnMut(&mut MockPageTable, VirtAddr)>;
 
 impl PageTable for MockPageTable {
-    type Entry = MockEntry;
 
-    fn map(&mut self, addr: VirtAddr, target: PhysAddr) -> &mut Self::Entry {
+    fn map(&mut self, addr: VirtAddr, target: PhysAddr) -> &mut Entry {
         let entry = &mut self.entries[addr / PAGE_SIZE];
         assert!(!entry.present);
         entry.present = true;
@@ -77,7 +76,7 @@ impl PageTable for MockPageTable {
         assert!(entry.present);
         entry.present = false;
     }
-    fn get_entry(&mut self, addr: VirtAddr) -> Option<&mut Self::Entry> {
+    fn get_entry(&mut self, addr: VirtAddr) -> Option<&mut Entry> {
         Some(&mut self.entries[addr / PAGE_SIZE])
     }
     fn get_page_slice_mut<'a,'b>(&'a mut self, addr: VirtAddr) -> &'b mut [u8] {
