@@ -91,8 +91,15 @@ checklist = {
 	]}
 }
 
+unit_test = ['/crate/process', ]
+
 realpath = sys.path[0]
 #os.system(realpath+'/clean_and_make.sh')
+for unit_test_path in unit_test:
+	if os.system('cd '+realpath+' && cd ..'+unit_test_path+' && cargo test'):
+		print("unit test "+unit_test_path+" error")
+		sys.exit(1)
+		
 
 for testcase in checklist.keys():
 	qemu = subprocess.Popen(realpath+'/make_and_run.sh', shell=True, \
@@ -111,6 +118,7 @@ for testcase in checklist.keys():
 	start = res.find(testcase)
 	if start < 0 :
 		print("Error before go into shell")
+		sys.exit(2)
 	res = res[start:]
 	point = 1
 	for output in checklist[testcase]['rule']:
