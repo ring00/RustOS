@@ -46,7 +46,7 @@ impl<T: PartialEq> EventHub<T> {
     pub fn pop(&mut self) -> Option<T> {
         match self.timers.front() {
             None => return None,
-            Some(timer) if timer.time != self.tick => return None,
+            Some(timer) if timer.time > self.tick => return None,
             _ => {}
         };
         self.timers.pop_front().map(|t| t.data)

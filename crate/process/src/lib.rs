@@ -26,3 +26,7 @@ mod interrupt;
 
 pub use process_manager::*;
 pub use processor::Processor;
+
+
+#[cfg(test)]
+mod test;
