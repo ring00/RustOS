@@ -277,21 +277,6 @@ pub enum SwapError {
 }
 
 /*
-impl<T: PageTable, M: SwapManager, S: Swapper> Deref for SwapExt<T, M, S> {
-    type Target = T;
-
-    fn deref(&self) -> &<Self as Deref>::Target {
-        &self.page_table
-    }
-}
-
-impl<T: PageTable, M: SwapManager, S: Swapper> DerefMut for SwapExt<T, M, S> {
-    fn deref_mut(&mut self) -> &mut <Self as Deref>::Target {
-        &mut self.page_table
-    }
-}
-*/
-/*
 #[cfg(test)]
 mod test {
     use super::*;

@@ -213,7 +213,6 @@ pub struct MemoryAttr {
     user: bool,
     readonly: bool,
     execute: bool,
-    hide: bool,
 }
 
 impl MemoryAttr {
@@ -241,14 +240,7 @@ impl MemoryAttr {
         self.execute = true;
         self
     }
-    /*
-    **  @brief  set the memory attribute's hide bit
-    **  @retval MemoryAttr           the memory attribute itself
-    */
-    pub fn hide(mut self) -> Self {
-        self.hide = true;
-        self
-    }
+ 
 
     
     /*
@@ -258,11 +250,12 @@ impl MemoryAttr {
     **  @retval none
     */
     pub fn apply(&self, entry: &mut Entry) {
-        if self.user { entry.set_user(true); }
-        if self.readonly { entry.set_writable(false); }
-        if self.execute { entry.set_execute(true); }
-        if self.hide { entry.set_present(false); }
-        if self.user || self.readonly || self.execute || self.hide { entry.update(); }
+        entry.set_present(true);
+        entry.set_user(self.user);
+        entry.set_writable(!self.readonly);
+        entry.set_execute(self.execute);
+        //entry.set_mmio(self.mmio);
+        entry.update();
     }
 
     pub fn is_readonly(&self) -> bool {

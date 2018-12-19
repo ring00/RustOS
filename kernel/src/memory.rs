@@ -175,6 +175,7 @@ impl MemoryHandler for SimpleMemoryHandler{
     }
 
     fn unmap(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
+        info!("COME into Simple unmap");
         pt.unmap(addr);
     }
     
@@ -229,6 +230,7 @@ impl MemoryHandler for NormalMemoryHandler{
     }
 
     fn unmap(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
+        info!("COME into Normal unmap");
         let target = pt.get_entry(addr).expect("fail to get entry").target();
         InactivePageTable0::dealloc_frame(target);
         pt.unmap(addr);
@@ -275,6 +277,7 @@ impl MemoryHandler for SwapMemoryHandler{
     }
 
     fn map(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
+        //info!("COME into Swap MemoryHandler, addr is {:x?}", addr);
         let id = self.delay_alloc.iter().position(|x|*x == addr);
         if id.is_some(){
             info!("delay allocated addr: {:x?}", addr);
@@ -295,18 +298,21 @@ impl MemoryHandler for SwapMemoryHandler{
     }
 
     fn unmap(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
+        info!("COME into Swap unmap, addr");
         unsafe{
             self.swap_ext.lock().remove_from_swappable(pt, inpt as *mut InactivePageTable0, addr, || InactivePageTable0::alloc_frame().expect("alloc frame failed"));
         }
         if pt.get_entry(addr).expect("fail to get entry").present(){
             let target = pt.get_entry(addr).expect("fail to get entry").target();
             InactivePageTable0::dealloc_frame(target);
+            pt.unmap(addr);
         }
         else{
             // set valid for pt.unmap function
             pt.get_entry(addr).expect("fail to get entry").set_present(true);
+            // infact we need to unmap the addr here as well however since pt.unmap won't deallocate the p1-table page now ,we don't need to do it just now
         }
-        pt.unmap(addr);
+        //pt.unmap(addr);
     }
     
     fn page_fault_handler(&self, page_table: &mut PageTable, inpt: usize, addr: VirtAddr) -> bool {
@@ -327,8 +333,7 @@ impl MemoryHandler for SwapMemoryHandler{
                     let entry = page_table.get_entry(addr).expect("fail to get entry");
                     entry.set_target(frame);
                     //let new_entry = self.page_table.map(addr, frame);
-                    entry.set_present(true);
-                    entry.update();
+                    self.flags.apply(entry);
                 }
                 unsafe{self.swap_ext.lock().set_swappable(page_table, inpt as *mut InactivePageTable0, Page::of_addr(addr).start_address())};
                 //area.get_flags().apply(new_entry); this instruction may be used when hide attr is used
@@ -437,7 +442,7 @@ impl MemoryHandler for CowMemoryHandler{
     }
 
     fn unmap(&self, pt: &mut PageTable, inpt: usize, addr: VirtAddr){
-        //info!("COME INTO COW UNMAP. addr is {:x?}", addr);
+        info!("COME INTO COW UNMAP. addr is {:x?}", addr);
         let target = pt.get_entry(addr).expect("fail to get entry").target();
         pt.unmap(addr);
         //info!("finish pt.unmap");
