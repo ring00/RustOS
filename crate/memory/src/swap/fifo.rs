@@ -34,26 +34,37 @@ impl SwapManager for FifoSwapManager {
     }
 }
 
-/*
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use swap::test::*;
+    //use swap::test::*;
 
     #[test]
     fn test() {
-        use self::MemOp::{R, W};
-        let ops = [
-            R(0x1000), R(0x2000), R(0x3000), R(0x4000),
-            W(0x3000), W(0x1000), W(0x4000), W(0x2000), W(0x5000),
-            W(0x2000), W(0x1000), W(0x2000), W(0x3000), W(0x4000),
-            W(0x5000), R(0x1000), W(0x1000)];
-        let pgfault_count = [
-            1, 2, 3, 4,
-            4, 4, 4, 4, 5,
-            5, 6, 7, 8, 9,
-            10, 11, 11];
-        test_manager(FifoSwapManager::default(), &ops, &pgfault_count);
+        let mut manager = FifoSwapManager::default();
+        let pt1 = 0x0;
+        let pt1_token = 0x0;
+        let pt2 = 0x1;
+        let pt2_token = 0x1000;
+        manager.push(Frame::new(pt1, 0x0, pt1_token));
+        manager.push(Frame::new(pt1, 0x1000, pt1_token));
+        manager.push(Frame::new(pt1, 0x2000, pt1_token));
+        manager.push(Frame::new(pt2, 0x1000, pt2_token));
+        manager.push(Frame::new(pt2, 0x0, pt2_token));
+        manager.push(Frame::new(pt1, 0x3000, pt1_token));
+        
+        manager.remove(pt1_token, 0x2000);
+        manager.remove(pt2_token, 0x0);
+        use super::mock_swapper::MockSwapper;
+        use super::paging::mock_page_table::MockPageTable;
+        let mut swapper = MockSwapper::default();
+        let mut pagetable = MockPageTable::new();
+
+        assert_eq!(Frame::new(pt1, 0x0, pt1_token), manager.pop(&mut pagetable, &mut swapper).expect("pop failed"));
+        assert_eq!(Frame::new(pt1, 0x1000, pt1_token), manager.pop(&mut pagetable, &mut swapper).expect("pop failed"));
+        assert_eq!(Frame::new(pt2, 0x1000, pt2_token), manager.pop(&mut pagetable, &mut swapper).expect("pop failed"));
+        assert_eq!(Frame::new(pt1, 0x3000, pt1_token), manager.pop(&mut pagetable, &mut swapper).expect("pop failed"));
+
     }
 }
-*/

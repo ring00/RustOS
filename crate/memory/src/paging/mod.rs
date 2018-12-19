@@ -8,7 +8,7 @@ use super::memory_set::InactivePageTable;
 pub use self::mock_page_table::MockPageTable;
 
 #[cfg(test)]
-mod mock_page_table;
+pub mod mock_page_table;
 
 // trait for PageTable
 pub trait PageTable {
