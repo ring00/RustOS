@@ -101,9 +101,9 @@ qemu_opts += -d $(d)
 endif
 
 ### build args ###
-ifneq ($(graphic), on)
-features += nographic
-endif
+#ifneq ($(graphic), on)
+#features += nographic
+#endif
 
 ifeq ($(board), raspi3)
 # qemu only has generic timer
