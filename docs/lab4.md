@@ -12,7 +12,7 @@
 
 ## 实验原理
 
-程序等于算法加数据结构，为了实现内核线程管理的功能，我们一方面需要表示内核线程的数据结构，另一方面需要对线程进行管理的调度算法。
+程序等于算法加数据结构，为了实现内核线程管理的功能，我们一方面需要表示内核线程的数据结构，另一方面需要在线程间进行切换的调度算法。
 
 ### 数据结构
 
@@ -87,6 +87,78 @@ impl Context for Process {
 }
 ```
 
+### 线程切换
+
+```rust
+pub unsafe extern fn switch(&mut self, _target: &mut Self) {
+    #[cfg(target_arch = "riscv32")]
+    asm!(r"
+    .equ XLENB, 4
+    .macro Load reg, mem
+        lw \reg, \mem
+    .endm
+    .macro Store reg, mem
+        sw \reg, \mem
+    .endm");
+    asm!("
+    // save from's registers
+    addi  sp, sp, (-XLENB*14)
+    Store sp, 0(a0)
+    Store ra, 0*XLENB(sp)
+    Store s0, 2*XLENB(sp)
+    Store s1, 3*XLENB(sp)
+    Store s2, 4*XLENB(sp)
+    Store s3, 5*XLENB(sp)
+    Store s4, 6*XLENB(sp)
+    Store s5, 7*XLENB(sp)
+    Store s6, 8*XLENB(sp)
+    Store s7, 9*XLENB(sp)
+    Store s8, 10*XLENB(sp)
+    Store s9, 11*XLENB(sp)
+    Store s10, 12*XLENB(sp)
+    Store s11, 13*XLENB(sp)
+    csrr  s11, satp
+    Store s11, 1*XLENB(sp)
+    // restore to's registers
+    Load sp, 0(a1)
+    Load s11, 1*XLENB(sp)
+    csrw satp, s11
+    Load ra, 0*XLENB(sp)
+    Load s0, 2*XLENB(sp)
+    Load s1, 3*XLENB(sp)
+    Load s2, 4*XLENB(sp)
+    Load s3, 5*XLENB(sp)
+    Load s4, 6*XLENB(sp)
+    Load s5, 7*XLENB(sp)
+    Load s6, 8*XLENB(sp)
+    Load s7, 9*XLENB(sp)
+    Load s8, 10*XLENB(sp)
+    Load s9, 11*XLENB(sp)
+    Load s10, 12*XLENB(sp)
+    Load s11, 13*XLENB(sp)
+    addi sp, sp, (XLENB*14)
+    Store zero, 0(a1)
+    ret"
+    : : : : "volatile" )
+}
+```
+
 ### 线程创建
 
-### 线程切换
+```rust
+fn new_kernel_thread(entry: extern fn(usize) -> !, arg: usize, sp: usize) -> Self {
+    use core::mem::zeroed;
+    let mut tf: Self = unsafe { zeroed() };
+    tf.x[10] = arg; // a0
+    tf.x[2] = sp;
+    tf.sepc = entry as usize;
+    tf.sstatus = xstatus::read();
+    tf.sstatus.set_xpie(true);
+    tf.sstatus.set_xie(false);
+    #[cfg(feature = "m_mode")]
+    tf.sstatus.set_mpp(xstatus::MPP::Machine);
+    #[cfg(not(feature = "m_mode"))]
+    tf.sstatus.set_spp(xstatus::SPP::Supervisor);
+    tf
+}
+```
