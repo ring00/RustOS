@@ -40,7 +40,16 @@ struct ContextData {
     satp: usize,
     s: [usize; 12],
 }
+
+impl ContextData {
+    fn new(satp: usize) -> Self {
+        // satp(asid) just like cr3, save the physical address for Page directory?
+        ContextData { ra: __trapret as usize, satp, ..ContextData::default() }
+    }
+}
 ```
+
+可以发现构造新`struct ContextData`时，默认的返回地址寄存器`ra`的值为`__trapret`，这是为了利用中断返回机制来完成新线程的首次执行。
 
 #### 初始内核栈
 
@@ -147,16 +156,50 @@ pub unsafe extern fn switch(&mut self, _target: &mut Self) {
 ### 线程创建
 
 ```rust
-fn new_kernel_thread(entry: extern fn(usize) -> !, arg: usize, sp: usize) -> Self {
-    use core::mem::zeroed;
-    let mut tf: Self = unsafe { zeroed() };
-    tf.x[10] = arg; // a0
-    tf.x[2] = sp;
-    tf.sepc = entry as usize;
-    tf.sstatus = xstatus::read();
-    tf.sstatus.set_xpie(true);
-    tf.sstatus.set_xie(false);
-    tf.sstatus.set_spp(xstatus::SPP::Supervisor);
-    tf
+pub struct Context(usize);
+
+impl Context {
+    /*
+    * @param:
+    *   entry: program entry for the thread
+    *   arg: a0
+    *   kstack_top: kernel stack top
+    *   cr3: cr3 register, save the physical address of Page directory
+    * @brief:
+    *   generate the content of kernel stack for the new kernel thread and save it's address at kernel stack top - 1
+    * @retval:
+    *   a Context struct with the pointer to the kernel stack top - 1 as its only element
+    */
+    pub unsafe fn new_kernel_thread(entry: extern fn(usize) -> !, arg: usize, kstack_top: usize, cr3: usize) -> Self {
+        InitStack {
+            context: ContextData::new(cr3),
+            tf: TrapFrame::new_kernel_thread(entry, arg, kstack_top),
+        }.push_at(kstack_top)
+    }
 }
 ```
+
+我们可以使用`Context::new_kernel_thread`来创建一个新的内核线程，该函数向指定内核栈的顶部压入了上下文信息和一个中断帧。
+
+```rust
+impl TrapFrame {
+    fn new_kernel_thread(entry: extern fn(usize) -> !, arg: usize, sp: usize) -> Self {
+        use core::mem::zeroed;
+        let mut tf: Self = unsafe { zeroed() };
+        tf.x[10] = arg; // a0
+        tf.x[2] = sp;
+        tf.sepc = entry as usize;
+        tf.sstatus = xstatus::read();
+        tf.sstatus.set_xpie(true);
+        tf.sstatus.set_xie(false);
+        tf.sstatus.set_spp(xstatus::SPP::Supervisor);
+        tf
+    }
+}
+```
+`TrapFrame::new_kernel_thread`为新的内核线程够构造了一个中断帧，中断帧中保存的`epc`寄存器为新线程要执行的函数的入口，因此通过中断返回指令`sret`，我们就能够开始执行新线程。
+
+由上述信息可知，一个新内核线程从创建到执行的过程如下：
+1. `Context::new_kernel_thread`在内核栈上完成`InitStack`的初始化操作；
+2. `switch`函数执行，并将`InitStack::context::ra`即`__trapret`的地址放入`ra`寄存器中；
+3. `__trapret`执行，首先根据`InitStack::tf`回复`sp`等寄存器，然后执行`sret`，跳转到`spec`所指地址开始新线程的执行。
