@@ -91,7 +91,6 @@ impl Context for Process {
 
 ```rust
 pub unsafe extern fn switch(&mut self, _target: &mut Self) {
-    #[cfg(target_arch = "riscv32")]
     asm!(r"
     .equ XLENB, 4
     .macro Load reg, mem
@@ -143,6 +142,8 @@ pub unsafe extern fn switch(&mut self, _target: &mut Self) {
 }
 ```
 
+上述汇编语句完成了从一个线程的上下文切换到另一个线程上下文的过程，可以看出一些寄存器被保存到了栈上，构成了`struct ContextData`的结构，然后目标线程对应的寄存器被一次恢复，从而完成了线程上下文的切换。
+
 ### 线程创建
 
 ```rust
@@ -155,9 +156,6 @@ fn new_kernel_thread(entry: extern fn(usize) -> !, arg: usize, sp: usize) -> Sel
     tf.sstatus = xstatus::read();
     tf.sstatus.set_xpie(true);
     tf.sstatus.set_xie(false);
-    #[cfg(feature = "m_mode")]
-    tf.sstatus.set_mpp(xstatus::MPP::Machine);
-    #[cfg(not(feature = "m_mode"))]
     tf.sstatus.set_spp(xstatus::SPP::Supervisor);
     tf
 }
