@@ -17,8 +17,7 @@
 为了在操作系统中运行用户进程，我们一般需要注意以下问题：
 1. 如何从外存将程序加载进内存？
 2. 如何启动用户进程？
-3. 如何终止用户进程？
-4. 用户进程如何获得操作系统提供的服务？
+3. 用户进程如何获得操作系统提供的服务？
 
 下面我们依次研究上述问题。
 
@@ -166,3 +165,126 @@ impl TrapFrame {
 1. `Process::new_user`载入用户程序并加入调度队列中；
 2. `switch`函数执行，并将`InitStack::context::ra`即`__trapret`的地址放入`ra`寄存器中，因此`switch`函数执行完成后返回到`__trapret`而非调用入口，同时还将`ContextData::satp`即用户页表基址放入`satp`寄存器中；
 3. `__trapret`执行，首先根据`InitStack::tf`中断帧的内容回复寄存器，然后执行`sret`，跳转到`spec`所指地址开始用户进程的执行。
+
+### 系统调用
+
+系统调用是操作系统为用户进程提供服务的接口层，使用系统调用的好处有：
+1. 简化用户进程的实现，把一些共性的、与特权指令相关的任务放到操作系统层来实现
+2. 接口规定好后，可以检查用户进程传递的参数，保护操作系统不会被用户进程破坏
+
+从硬件层面上看，实现系统调用需要硬件能够支持从用户态通过某种机制切换到内核态。
+试验一中介绍的软中断就可以完成上述任务。
+
+用户态与系统调用相关的代码在`user/rcore-ulib/src/syscall.rs`文件中，发出一个系统调用，实际上就是使用`ecall`指令触发一个中断，同时我们要在触发中断前设置`x10`-`x15`寄存器的值，这样一来内核就能通过检查寄存器的值来判断用户需要调用的服务和相应的参数。
+
+```rust
+fn sys_call(syscall_id: SyscallId, arg0: usize, arg1: usize, arg2: usize, arg3: usize, arg4: usize, arg5: usize) -> i32 {
+    let id = syscall_id as usize;
+    let ret: i32;
+
+    unsafe {
+        asm!("ecall"
+        : "={x10}" (ret)
+        : "{x10}" (id), "{x11}" (arg0), "{x12}" (arg1), "{x13}" (arg2), "{x14}" (arg3), "{x15}" (arg4), "{x16}" (arg5)
+        : "memory"
+        : "volatile");
+    }
+    ret
+}
+```
+
+其中寄存器`x10`保存了系统调用号，我们给系统调用约定的调用号如下：
+
+```rust
+enum SyscallId{
+    Exit = 1,
+    Fork = 2,
+    Wait = 3,
+    Exec = 4,
+    Clone = 5,
+    Yield = 10,
+    Sleep = 11,
+    Kill = 12,
+    GetTime = 17,
+    GetPid = 18,
+    Mmap = 20,
+    Munmap = 21,
+    Shmem = 22,
+    Putc = 30,
+    Pgdir = 31,
+    Open = 100,
+    Close = 101,
+    Read = 102,
+    Write = 103,
+    Seek = 104,
+    Fstat = 110,
+    Fsync = 111,
+    GetCwd = 121,
+    GetDirEntry = 128,
+    Dup = 130,
+    Lab6SetPriority = 255,
+}
+```
+
+例如`sys_sleep`调用会将`SyscallId::Sleep`放入`x10`，睡眠时间放入`x11`，然后调用`ecall`。
+
+```rust
+pub fn sys_sleep(time: usize) -> i32 {
+    sys_call(SyscallId::Sleep, time, 0, 0, 0, 0, 0)
+}
+```
+
+进入内核态的中断处理例程后，会调用内核中的`syscall`函数。
+
+```rust
+/*
+ * @param:
+ *   TrapFrame: the trapFrame of the Interrupt/Exception/Trap to be processed
+ * @brief:
+ *   process the Interrupt/Exception/Trap
+ */
+#[no_mangle]
+pub extern fn rust_trap(tf: &mut TrapFrame) {
+    use self::mcause::{Trap, Interrupt as I, Exception as E};
+    match tf.scause.cause() {
+        // ......
+        Trap::Exception(E::UserEnvCall) => syscall(tf),
+        // ......
+        _ => crate::trap::error(tf),
+    }
+    trace!("Interrupt end");
+}
+
+/*
+ * @param:
+ *   TrapFrame: the Trapframe for the syscall
+ * @brief:
+ *   process syscall
+ */
+fn syscall(tf: &mut TrapFrame) {
+    tf.sepc += 4;   // Must before syscall, because of fork.
+    let ret = crate::syscall::syscall(tf.x[10], [tf.x[11], tf.x[12], tf.x[13], tf.x[14], tf.x[15], tf.x[16]], tf);
+    tf.x[10] = ret as usize; // return code stored in a0
+}
+```
+
+源码`kernel/src/syscall.rs`中的`crate::syscall::syscall`再根据系统调用号进行相应的处理。
+
+```rust
+/// System call dispatcher
+pub fn syscall(id: usize, args: [usize; 6], tf: &mut TrapFrame) -> isize {
+    let ret = match id {
+        // ......
+        011 => sys_sleep(args[0]),
+        // ......
+        _ => {
+            error!("unknown syscall id: {:#x?}, args: {:x?}", id, args);
+            crate::trap::error(tf);
+        }
+    };
+    match ret {
+        Ok(code) => code,
+        Err(err) => -(err as isize),
+    }
+}
+```
