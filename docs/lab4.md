@@ -69,6 +69,7 @@ pub struct InitStack {
 
 ```rust
 pub trait Context {
+    /// 将当前CPU切换到另一个上下文
     unsafe extern "C"
     fn switch_to(&mut self, target: &mut Context);
 }
